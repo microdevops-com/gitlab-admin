@@ -1,0 +1,35 @@
+gitlab:
+  url: https://gitlab.example.com
+  author_email: commiter@example.com
+  author_name: Commit Author
+projects:
+  - path: dev/projects/subgroup/project1 # mandatory
+    active: True # mandatory
+    description: My Project # mandatory
+    visibility: internal # mandatory
+    maintainers_group: dev/maintainer # optional
+    deploy_keys: # optional
+      - title: root@srv1.example.com
+        key: ssh-ed25519 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA root@srv1.example.com
+      - title: root@srv2.example.com
+        key: ssh-ed25519 BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB root@srv2.example.com
+    resolve_outdated_diff_discussions: True # optional
+    only_allow_merge_if_pipeline_succeeds: True # optional
+    only_allow_merge_if_all_discussions_are_resolved: True # optional
+    shared_runners_enabled: False # optional
+    issues_enabled: False # optional
+    wiki_enabled: False # optional
+    packages_enabled: False # optional
+    approvals_before_merge: 1 # optional
+    protected_tags: # optional
+      - 'v*'
+    variables: # optional
+      - key: TEST1 # mandatory
+        value: XXX1 # mandatory
+        variable_type: env_var # mandatory, env_var or file
+        protected: True # mandatory
+        masked: False # mandatory
+        environment_scope: '*' # mandatory
+    template: # mandatory for --template-projects
+      path: .template # mandatory
+      cmd: XXX=zzz ./test.sh # mandatory, runned as cd .template; XXX=zzz ./test.sh ../.projects/dev/projects/subgroup/project1
