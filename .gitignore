@@ -3,6 +3,7 @@ projects.yaml
 log
 .projects
 .template
+__pycache__
 
 # swap
 [._]*.s[a-v][a-z]
@@ -14,14 +15,3 @@ Session.vim
 # temporary
 .netrwhist
 *~
-# python
-__pycache__
-# logs
-log
-
-# pdf
-*.pdf
-
-tmp
-.projects
-.lxd
