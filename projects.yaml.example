@@ -30,6 +30,12 @@ projects:
         protected: True # mandatory
         masked: False # mandatory
         environment_scope: '*' # mandatory
+      - key: TEST1 # mandatory, we can have the same var in different scopes
+        value: XXX1 # mandatory
+        variable_type: env_var # mandatory, env_var or file
+        protected: True # mandatory
+        masked: False # mandatory
+        environment_scope: 'staging' # mandatory
     template: # mandatory for --template-projects
       path: .template # mandatory
       cmd: XXX=zzz ./test.sh # mandatory, runned as cd .template; XXX=zzz ./test.sh ../.projects/dev/projects/subgroup/project1

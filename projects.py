@@ -145,6 +145,13 @@ if __name__ == "__main__":
                                     project.protectedtags.create({'name': tag, 'create_access_level': '40'})
                         # CI Variables
                         if "variables" in project_dict:
+                            # We cannot update vars as key for update is not scope safe, so we delete first
+                            for var in project_dict["variables"]:
+                                if any(project_var.key == var["key"] for project_var in project.variables.list()):
+                                    project.variables.delete(id=var["key"])
+                            # Then save
+                            project.save()
+                            # And add again, adding is scope safe
                             for var in project_dict["variables"]:
                                 var_dict = {
                                     "key": var["key"],
@@ -154,10 +161,7 @@ if __name__ == "__main__":
                                     "masked": var["masked"],
                                     "environment_scope": var["environment_scope"]
                                 }
-                                if not any(project_var.key == var["key"] for project_var in project.variables.list()):
-                                    project.variables.create(var_dict)
-                                else:
-                                    project.variables.update(id=var["key"], new_data=var_dict)
+                                project.variables.create(var_dict)
 
                         # Save
                         project.save()
@@ -170,6 +174,8 @@ if __name__ == "__main__":
                     logger.info(project.protectedtags.list())
                     logger.info("Project {project} variables:".format(project=project_dict["path"]))
                     logger.info(project.variables.list())
+                    for project_var in project.variables.list():
+                        logger.info(project_var)
             
         if args.template_projects:
             
