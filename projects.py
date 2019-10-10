@@ -26,6 +26,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", dest="debug", help="enable debug", action="store_true")
     parser.add_argument("--git-push", dest="git_push", help="push after commit", action="store_true")
     parser.add_argument("--dry-run-gitlab", dest="dry_run_gitlab", help="no new objects created in gitlab", action="store_true")
+    parser.add_argument("--yaml", dest="yaml", help="use file FILE instead of default projects.yaml", nargs=1, metavar=("FILE"))
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--setup-projects", dest="setup_projects", help="ensure projects created in GitLab, their settings setup", action="store_true")
     group.add_argument("--template-projects", dest="template_projects", help=" update project git repo from template using current user git creds", action="store_true")
@@ -50,10 +51,15 @@ if __name__ == "__main__":
         # Chdir to work dir
         os.chdir(WORK_DIR)
 
-        # Read PROJECTS_YAML
-        projects_yaml_dict = load_yaml("{0}/{1}".format(WORK_DIR, PROJECTS_YAML), logger)
-        if projects_yaml_dict is None:
-            raise Exception("Config file error or missing: {0}/{1}".format(WORK_DIR, PROJECTS_YAML))
+        # Read projects
+        if args.yaml is not None:
+            projects_yaml_dict = load_yaml("{0}".format(args.yaml[0]), logger)
+            if projects_yaml_dict is None:
+                raise Exception("Config file error or missing: {0}".format(args.yaml[0]))
+        else:
+            projects_yaml_dict = load_yaml("{0}/{1}".format(WORK_DIR, PROJECTS_YAML), logger)
+            if projects_yaml_dict is None:
+                raise Exception("Config file error or missing: {0}/{1}".format(WORK_DIR, PROJECTS_YAML))
         
         # Do tasks
 
