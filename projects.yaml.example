@@ -13,6 +13,10 @@ projects:
         key: ssh-ed25519 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA root@srv1.example.com
       - title: root@srv2.example.com
         key: ssh-ed25519 BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB root@srv2.example.com
+    deploy_tokens: # optional
+      - name: gitlab-deploy-token
+        scopes:
+          - read_registry
     resolve_outdated_diff_discussions: True # optional
     only_allow_merge_if_pipeline_succeeds: True # optional
     only_allow_merge_if_all_discussions_are_resolved: True # optional
@@ -20,9 +24,36 @@ projects:
     issues_enabled: False # optional
     wiki_enabled: False # optional
     packages_enabled: False # optional
+    service_desk_enabled: False # optional
     approvals_before_merge: 1 # optional
+    reset_approvals_on_push: True # optional
+    disable_overriding_approvers_per_merge_request: True # optional
+    merge_requests_author_approval: False # optional
+    merge_requests_disable_committers_approval: True # optional
+    require_password_to_approve: False # optional
+    protected_branches: # optional, see https://docs.gitlab.com/ee/api/projects.html for access leveles
+      - name: master
+        push_access_level: 40
+        merge_access_level: 40
+        code_owner_approval_required: True
     protected_tags: # optional
-      - 'v*'
+      - name: 'v*'
+        create_access_level: 40
+    merge_request_approval_rules: # optional
+      - name: QA
+        groups:
+          - dev/qa
+        branch: master
+        approvals_required: 1
+    template: # mandatory for --template-projects
+      path: .template # mandatory
+      cmd: XXX=zzz ./test.sh # mandatory, runned as cd .template; XXX=zzz ./test.sh ../.projects/dev/projects/subgroup/project1
+    specific_runners_enable: # optional, enable specific runners for projects, runners are identified by description field
+      - dev-runner
+      - prod-runner
+    protected_environments: # optional, create and protect environments
+      - name: prod
+        deploy_access_level: 40
     variables: # optional
       - key: TEST1 # mandatory
         value: XXX1 # mandatory
@@ -36,6 +67,3 @@ projects:
         protected: True # mandatory
         masked: False # mandatory
         environment_scope: 'staging' # mandatory
-    template: # mandatory for --template-projects
-      path: .template # mandatory
-      cmd: XXX=zzz ./test.sh # mandatory, runned as cd .template; XXX=zzz ./test.sh ../.projects/dev/projects/subgroup/project1

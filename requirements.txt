@@ -1,2 +1,2 @@
-python-gitlab==1.11.0
+python-gitlab==2.4.0
 PyYAML==4.2b1
