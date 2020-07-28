@@ -8,6 +8,9 @@ projects:
     description: My Project # mandatory
     visibility: internal # mandatory
     maintainers_group: dev/maintainer # optional
+    members:
+      - user: bot1
+        access_level: 10 # 10 - guest, 20 - reporter, 30 - developer, 40 - maintainer
     deploy_keys: # optional
       - title: root@srv1.example.com
         key: ssh-ed25519 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA root@srv1.example.com
@@ -31,7 +34,7 @@ projects:
     merge_requests_author_approval: False # optional
     merge_requests_disable_committers_approval: True # optional
     require_password_to_approve: False # optional
-    protected_branches: # optional, see https://docs.gitlab.com/ee/api/projects.html for access leveles
+    protected_branches: # optional
       - name: master
         push_access_level: 40
         merge_access_level: 40

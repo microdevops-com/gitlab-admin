@@ -84,7 +84,7 @@ if __name__ == "__main__":
                         project = gl.projects.get(project_dict["path"])
                     except gitlab.exceptions.GitlabGetError as e:
                         # Create if not found
-                        logger.info("Salt project {project}, creating".format(project=project_dict["path"]))
+                        logger.info("Project {project}, creating".format(project=project_dict["path"]))
                         # Search for the group
                         # Split and join up to last slash project path
                         group_full_path = "/".join(project_dict["path"].split("/")[:-1])
@@ -147,6 +147,18 @@ if __name__ == "__main__":
                                     logger.info("Found group ID: {id}, name: {group}".format(group=group.full_name, id=group.id))
                             if not any(shared_group["group_id"] == group_id for shared_group in project.shared_with_groups):
                                 project.share(group_id, gitlab.MAINTAINER_ACCESS)
+                        # Members
+                        if "members" in project_dict:
+                            for member in project_dict["members"]:
+                                user_id = gl.users.list(username=member["user"])[0].id
+                                logger.info("Found user ID: {id}, name: {user}".format(id=user_id, user=member["user"]))
+                                try:
+                                    current_member = project.members.get(user_id)
+                                    current_member.access_level = member["access_level"]
+                                    current_member.save()
+                                except gitlab.exceptions.GitlabGetError as e:
+                                    member = project.members.create({'user_id': user_id, 'access_level': member["access_level"]})
+                                    member.save()
                         # Deploy keys
                         if "deploy_keys" in project_dict:
                             for deploy_key in project_dict["deploy_keys"]:
@@ -373,8 +385,8 @@ if __name__ == "__main__":
                         """
                         set -e
                         cd {PROJECTS_SUBDIR}/{path_with_namespace}
-			git add -A
-			git commit -m "template installed" || true
+                        git add -A
+                        git commit -m "template installed" || true
                         {push}
                         """
                     ).format(PROJECTS_SUBDIR=PROJECTS_SUBDIR, path_with_namespace=project.path_with_namespace, push="git push" if args.git_push else "")
