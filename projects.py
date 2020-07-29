@@ -133,7 +133,7 @@ if __name__ == "__main__":
                             project.approvals_before_merge = project_dict["approvals_before_merge"]
                         if "service_desk_enabled" in project_dict:
                             project.service_desk_enabled = project_dict["service_desk_enabled"]
-                        # Todo: project.forward_deployment_enabled
+                        # TODO: project.forward_deployment_enabled
                         # https://gitlab.com/gitlab-org/gitlab/-/issues/212621
                         # Maintainer group
                         if "maintainers_group" in project_dict:
