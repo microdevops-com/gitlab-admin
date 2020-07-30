@@ -248,8 +248,8 @@ if __name__ == "__main__":
                                     }
                                 )
                         # Runners
-                        if "specific_runners_enable" in project_dict:
-                            for runner_to_add in project_dict["specific_runners_enable"]:
+                        if "specific_runners_enabled" in project_dict:
+                            for runner_to_add in project_dict["specific_runners_enabled"]:
                                 for runner in gl.runners.list():
                                     if runner.description == runner_to_add:
                                         if not any(added_runner.description == runner_to_add for added_runner in project.runners.list()):

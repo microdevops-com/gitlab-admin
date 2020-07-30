@@ -51,7 +51,7 @@ projects:
     template: # mandatory for --template-projects
       path: .template # mandatory
       cmd: XXX=zzz ./test.sh # mandatory, runned as cd .template; XXX=zzz ./test.sh ../.projects/dev/projects/subgroup/project1
-    specific_runners_enable: # optional, enable specific runners for projects, runners are identified by description field
+    specific_runners_enabled: # optional, enable specific runners for projects, runners are identified by description field
       - dev-runner
       - prod-runner
     protected_environments: # optional, create and protect environments
