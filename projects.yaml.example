@@ -48,9 +48,6 @@ projects:
           - dev/qa
         branch: master
         approvals_required: 1
-    template: # mandatory for --template-projects
-      path: .template # mandatory
-      cmd: XXX=zzz ./test.sh # mandatory, runned as cd .template; XXX=zzz ./test.sh ../.projects/dev/projects/subgroup/project1
     specific_runners_enabled: # optional, enable specific runners for projects, runners are identified by description field
       - dev-runner
       - prod-runner
@@ -70,3 +67,11 @@ projects:
         protected: True # mandatory
         masked: False # mandatory
         environment_scope: 'staging' # mandatory
+    template: # mandatory for --template-projects
+      path: .template # mandatory
+      cmd: XXX=zzz ./test.sh # mandatory, runned as cd .template; XXX=zzz ./test.sh ../.projects/dev/projects/subgroup/project1
+    bulk_delete_tags: # mandatory for --bulk-delete-tags-in-projects, https://docs.gitlab.com/ce/api/container_registry.html#delete-registry-repository-tags-in-bulk
+      name_regex_delete: .* # mandatory
+      older_than: 2w # optional
+      name_regex_keep: master # optional
+      keep_n: 2 # optional

@@ -30,7 +30,8 @@ if __name__ == "__main__":
     parser.add_argument("--yaml", dest="yaml", help="use file FILE instead of default projects.yaml", nargs=1, metavar=("FILE"))
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--setup-projects", dest="setup_projects", help="ensure projects created in GitLab, their settings setup", action="store_true")
-    group.add_argument("--template-projects", dest="template_projects", help=" update project git repo from template using current user git creds", action="store_true")
+    group.add_argument("--template-projects", dest="template_projects", help="update projects git repos from template using current user git creds", action="store_true")
+    group.add_argument("--bulk-delete-tags-in-projects", dest="bulk_delete_tags_in_projects", help="bulk delete tags in projects", action="store_true")
     args = parser.parse_args()
 
     # Set logger and console debug
@@ -167,7 +168,7 @@ if __name__ == "__main__":
                         if "deploy_tokens" in project_dict:
                             for deploy_token in project_dict["deploy_tokens"]:
                                 # Tokens should be explicitly removed each time as revoked manually with the same name exist forever and cannot be detected revoked
-                                for token in project.deploytokens.list():
+                                for token in project.deploytokens.list(all=True):
                                     if token.name == deploy_token["name"]:
                                         token.delete()
                                 token = project.deploytokens.create({'name': deploy_token["name"], 'scopes': deploy_token["scopes"]})
@@ -201,7 +202,7 @@ if __name__ == "__main__":
                         # Protected branches
                         if "protected_branches" in project_dict:
                             for branch in project_dict["protected_branches"]:
-                                if any(project_branch.name == branch["name"] for project_branch in project.protectedbranches.list()):
+                                if any(project_branch.name == branch["name"] for project_branch in project.protectedbranches.list(all=True)):
                                     p_branch = project.protectedbranches.get(branch["name"])
                                     p_branch.delete()
                                 project.protectedbranches.create(
@@ -217,14 +218,14 @@ if __name__ == "__main__":
                         # Protected tags
                         if "protected_tags" in project_dict:
                             for tag in project_dict["protected_tags"]:
-                                if any(project_tag.name == tag["name"] for project_tag in project.protectedtags.list()):
+                                if any(project_tag.name == tag["name"] for project_tag in project.protectedtags.list(all=True)):
                                     p_tag = project.protectedtags.get(tag["name"])
                                     p_tag.delete()
                                 project.protectedtags.create({'name': tag["name"], 'create_access_level': tag["create_access_level"]})
                         # MR approval rules (should be done after branch protection reset)
                         if "merge_request_approval_rules" in project_dict:
                             # Empty list before setting
-                            for mrar in project.approvalrules.list():
+                            for mrar in project.approvalrules.list(all=True):
                                 if mrar.name == 'All Members':
                                     continue
                                 mrar.delete()
@@ -250,15 +251,15 @@ if __name__ == "__main__":
                         # Runners
                         if "specific_runners_enabled" in project_dict:
                             for runner_to_add in project_dict["specific_runners_enabled"]:
-                                for runner in gl.runners.list():
+                                for runner in gl.runners.list(all=True):
                                     if runner.description == runner_to_add:
-                                        if not any(added_runner.description == runner_to_add for added_runner in project.runners.list()):
+                                        if not any(added_runner.description == runner_to_add for added_runner in project.runners.list(all=True)):
                                             project.runners.create({'runner_id': runner.id})
                         # Protected envs
                         if "protected_environments" in project_dict:
                             for env in project_dict["protected_environments"]:
                                 # Create env first
-                                if not any(p_env.name == env["name"] for p_env in project.environments.list()):
+                                if not any(p_env.name == env["name"] for p_env in project.environments.list(all=True)):
                                     project.environments.create({'name': env["name"]})
                                 # Protect with curl (python not yet supported)
                                 data = {
@@ -288,23 +289,38 @@ if __name__ == "__main__":
                                 subprocess.run(script, shell=True, universal_newlines=True, check=True, executable="/bin/bash")
                         # CI Variables
                         if "variables" in project_dict:
-                            # We cannot update vars as key for update is not scope safe, so we delete first
+                            # We cannot update vars as key for update is not scope safe, so we delete first if var state is not as needed
                             for var in project_dict["variables"]:
-                                if any(project_var.key == var["key"] for project_var in project.variables.list()):
-                                    project.variables.delete(id=var["key"])
+                                #if any(project_var.key == var["key"] for project_var in project.variables.list(all=True)):
+                                #    project.variables.delete(id=var["key"], environment_scope=var["environment_scope"])
+                                for project_var in project.variables.list(all=True):
+                                    if project_var.environment_scope == var["environment_scope"] and project_var.key == var["key"]:
+                                        if (
+                                            project_var.value != str(var["value"])
+                                            or
+                                            project_var.variable_type != var["variable_type"] 
+                                            or
+                                            project_var.protected != var["protected"]
+                                            or
+                                            project_var.masked != var["masked"]
+                                            ):
+                                            project_var.delete()
+                                            logger.info("Var {scope} / {var} did not match yaml, deleted to be updated".format(scope=var["environment_scope"], var=var["key"]))
                             # Then save
                             project.save()
                             # And add again, adding is scope safe
                             for var in project_dict["variables"]:
-                                var_dict = {
-                                    "key": var["key"],
-                                    "value": var["value"],
-                                    "variable_type": var["variable_type"],
-                                    "protected": var["protected"],
-                                    "masked": var["masked"],
-                                    "environment_scope": var["environment_scope"]
-                                }
-                                project.variables.create(var_dict)
+                                if not any(project_var.environment_scope == var["environment_scope"] and project_var.key == var["key"] for project_var in project.variables.list(all=True)):
+                                    var_dict = {
+                                        "key": var["key"],
+                                        "value": var["value"],
+                                        "variable_type": var["variable_type"],
+                                        "protected": var["protected"],
+                                        "masked": var["masked"],
+                                        "environment_scope": var["environment_scope"]
+                                    }
+                                    project.variables.create(var_dict)
+                                    logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
 
                         # Save
                         project.save()
@@ -312,20 +328,20 @@ if __name__ == "__main__":
                     logger.info("Project {project} settings:".format(project=project_dict["path"]))
                     logger.info(project)
                     logger.info("Project {project} deploy keys:".format(project=project_dict["path"]))
-                    logger.info(project.keys.list())
+                    logger.info(project.keys.list(all=True))
                     logger.info("Project {project} deploy tokens:".format(project=project_dict["path"]))
-                    logger.info(project.deploytokens.list())
+                    logger.info(project.deploytokens.list(all=True))
                     logger.info("Project {project} protected branches:".format(project=project_dict["path"]))
-                    logger.info(project.protectedbranches.list())
+                    logger.info(project.protectedbranches.list(all=True))
                     logger.info("Project {project} protected tags:".format(project=project_dict["path"]))
-                    logger.info(project.protectedtags.list())
+                    logger.info(project.protectedtags.list(all=True))
                     logger.info("Project {project} runners:".format(project=project_dict["path"]))
-                    logger.info(project.runners.list())
+                    logger.info(project.runners.list(all=True))
                     logger.info("Project {project} environments:".format(project=project_dict["path"]))
-                    logger.info(project.environments.list())
+                    logger.info(project.environments.list(all=True))
                     logger.info("Project {project} variables:".format(project=project_dict["path"]))
-                    logger.info(project.variables.list())
-                    for project_var in project.variables.list():
+                    logger.info(project.variables.list(all=True))
+                    for project_var in project.variables.list(all=True):
                         logger.info(project_var)
             
         if args.template_projects:
@@ -393,6 +409,42 @@ if __name__ == "__main__":
                     logger.info("Running bash script:")
                     logger.info(script)
                     subprocess.run(script, shell=True, universal_newlines=True, check=True, executable="/bin/bash")
+
+        if args.bulk_delete_tags_in_projects:
+            
+            # Connect to GitLab
+            gl = gitlab.Gitlab(projects_yaml_dict["gitlab"]["url"], private_token=GL_ADMIN_PRIVATE_TOKEN)
+            gl.auth()
+
+            # For projects
+            for project_dict in projects_yaml_dict["projects"]:
+
+                logger.info("Found project yaml definition: {project}".format(project=project_dict))
+
+                # Check project active and 
+                if project_dict["active"] and "bulk_delete_tags" in project_dict:
+            
+                    # Get GitLab project for
+                    project = gl.projects.get(project_dict["path"])
+                    logger.info("Project {project} ssh_url_to_repo: {ssh_url_to_repo}, path_with_namespace: {path_with_namespace}".format(project=project_dict["path"], path_with_namespace=project.path_with_namespace, ssh_url_to_repo=project.ssh_url_to_repo))
+
+                    # Set needed project params
+                    if not args.dry_run_gitlab:
+
+                        # Loop over repos (subpaths) inside project
+                        for repo in project.repositories.list(all=True):
+                            try:
+                                # Run bulk delete
+                                repo.tags.delete_in_bulk(
+                                    name_regex_delete=project_dict["bulk_delete_tags"]["name_regex_delete"],
+                                    name_regex_keep=project_dict["bulk_delete_tags"].get("name_regex_keep", None),
+                                    keep_n=project_dict["bulk_delete_tags"].get("keep_n", None),
+                                    older_than=project_dict["bulk_delete_tags"].get("older_than", None)
+                                )
+                                logger.info("delete_in_bulk run for {path}".format(path=repo.path))
+                            # GitLab allows bulk delete only once per hour so log and ignore
+                            except gitlab.exceptions.GitlabDeleteError as e:
+                                logger.exception(e)
 
     # Reroute catched exception to log
     except Exception as e:
