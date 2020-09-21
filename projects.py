@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.6
 # -*- coding: utf-8 -*-
 
 # Import common code
@@ -304,7 +304,26 @@ if __name__ == "__main__":
                                             or
                                             project_var.masked != var["masked"]
                                             ):
-                                            project_var.delete()
+                                            # project_var.delete()
+                                            # There is a bug (at least at python-gitlab 2.5.0):
+                                            # gitlab.exceptions.GitlabDeleteError: 409: There are multiple variables with provided parameters. Please use 'filter[environment_scope]'
+                                            # So delete via direct curl API call
+                                            script = textwrap.dedent(
+                                                """
+                                                curl --request DELETE \
+                                                        --header "PRIVATE-TOKEN: {private_token}" \
+                                                        "{gitlab_url}/api/v4/projects/{path_with_namespace_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
+                                                """
+                                            ).format(
+                                                gitlab_url=projects_yaml_dict["gitlab"]["url"],
+                                                private_token=GL_ADMIN_PRIVATE_TOKEN,
+                                                path_with_namespace_encoded=project.path_with_namespace.replace("/", "%2F"),
+                                                key=var["key"],
+                                                environment_scope=var["environment_scope"].replace("*", "%2A")
+                                            )
+                                            logger.info("Running bash script:")
+                                            logger.info(script)
+                                            subprocess.run(script, shell=True, universal_newlines=True, check=True, executable="/bin/bash")
                                             logger.info("Var {scope} / {var} did not match yaml, deleted to be updated".format(scope=var["environment_scope"], var=var["key"]))
                             # Then save
                             project.save()
