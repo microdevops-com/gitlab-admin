@@ -20,10 +20,11 @@ projects:
       - name: gitlab-deploy-token
         scopes:
           - read_registry
+    shared_runners_enabled: False
     resolve_outdated_diff_discussions: True # optional
     only_allow_merge_if_pipeline_succeeds: True # optional
     only_allow_merge_if_all_discussions_are_resolved: True # optional
-    shared_runners_enabled: False # optional
+    skip_outdated_deployment_jobs: False # optional
     issues_enabled: False # optional
     wiki_enabled: False # optional
     packages_enabled: False # optional
@@ -36,7 +37,7 @@ projects:
     require_password_to_approve: False # optional
     protected_branches: # optional
       - name: master
-        push_access_level: 40
+        push_access_level: 0
         merge_access_level: 40
         code_owner_approval_required: True
     protected_tags: # optional
@@ -48,12 +49,35 @@ projects:
           - dev/qa
         branch: master
         approvals_required: 1
+    template: # mandatory for --template-projects
+      path: .template # mandatory
+      cmd: XXX=zzz ./test.sh # mandatory, runned as cd .template; XXX=zzz ./test.sh ../.projects/dev/projects/subgroup/project1
     specific_runners_enabled: # optional, enable specific runners for projects, runners are identified by description field
       - dev-runner
       - prod-runner
     protected_environments: # optional, create and protect environments
       - name: prod
         deploy_access_level: 40
+    bulk_delete_tags: # mandatory for --bulk-delete-tags-in-projects, https://docs.gitlab.com/ce/api/container_registry.html#delete-registry-repository-tags-in-bulk
+      # rule list
+      # several different rules can be applied to a project, each rule should be run on different hour as the bulk delete function can be only run once an hour (GitLab limitation)
+      # non prod tags
+      - run_on_hours: [10] # mandatory, day hours list to run this rule
+        image_repo_regex: .* # each project can have many docker repos nested in dirs, use regex to match repos against rule
+        name_regex_delete: .* # mandatory
+        older_than: 2w # optional
+        # both types of prod tags exclude
+        name_regex_keep: (?:^v.+|^master$) # optional
+      # branched prod tmp tags
+      - run_on_hours: [12]
+        image_repo_regex: .*
+        name_regex_delete: ^v\d+-\d+-\d+-.+$
+        older_than: 4w
+      # prod tags
+      - run_on_hours: [14]
+        image_repo_regex: .*
+        name_regex_delete: (?:^v\d+-\d+-\d+$|^master$)
+        keep_n: 10 # optional
     variables: # optional
       - key: TEST1 # mandatory
         value: XXX1 # mandatory
@@ -67,11 +91,3 @@ projects:
         protected: True # mandatory
         masked: False # mandatory
         environment_scope: 'staging' # mandatory
-    template: # mandatory for --template-projects
-      path: .template # mandatory
-      cmd: XXX=zzz ./test.sh # mandatory, runned as cd .template; XXX=zzz ./test.sh ../.projects/dev/projects/subgroup/project1
-    bulk_delete_tags: # mandatory for --bulk-delete-tags-in-projects, https://docs.gitlab.com/ce/api/container_registry.html#delete-registry-repository-tags-in-bulk
-      name_regex_delete: .* # mandatory
-      older_than: 2w # optional
-      name_regex_keep: master # optional
-      keep_n: 2 # optional

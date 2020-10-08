@@ -3,11 +3,15 @@
 
 # Import common code
 from sysadmws_common import *
+
 import gitlab
 import glob
 import textwrap
 import subprocess
 import json
+import re
+import psycopg2
+import datetime
 
 # Constants and envs
 
@@ -17,6 +21,10 @@ LOG_DIR = "./log"
 LOG_FILE = "projects.log"
 PROJECTS_YAML = "projects.yaml"
 PROJECTS_SUBDIR = ".projects"
+
+# Custom Exceptions
+class SubprocessRunError(Exception):
+    pass
 
 # Main
 
@@ -44,6 +52,22 @@ if __name__ == "__main__":
     if GL_ADMIN_PRIVATE_TOKEN is None:
         raise Exception("Env var GL_ADMIN_PRIVATE_TOKEN missing")
 
+    PG_DB_HOST = os.environ.get("PG_DB_HOST")
+    if PG_DB_HOST is None:
+        raise Exception("Env var PG_DB_HOST missing")
+
+    PG_DB_NAME = os.environ.get("PG_DB_NAME")
+    if PG_DB_NAME is None:
+        raise Exception("Env var PG_DB_NAME missing")
+
+    PG_DB_USER = os.environ.get("PG_DB_USER")
+    if PG_DB_USER is None:
+        raise Exception("Env var PG_DB_USER missing")
+
+    PG_DB_PASS = os.environ.get("PG_DB_PASS")
+    if PG_DB_PASS is None:
+        raise Exception("Env var PG_DB_PASS missing")
+
     # Catch exception to logger
 
     try:
@@ -63,6 +87,10 @@ if __name__ == "__main__":
             if projects_yaml_dict is None:
                 raise Exception("Config file error or missing: {0}/{1}".format(WORK_DIR, PROJECTS_YAML))
         
+        # Connect to PG
+        dsn = "host={} dbname={} user={} password={}".format(PG_DB_HOST, PG_DB_NAME, PG_DB_USER, PG_DB_PASS)
+        conn = psycopg2.connect(dsn)
+
         # Do tasks
 
         if args.setup_projects:
@@ -134,8 +162,6 @@ if __name__ == "__main__":
                             project.approvals_before_merge = project_dict["approvals_before_merge"]
                         if "service_desk_enabled" in project_dict:
                             project.service_desk_enabled = project_dict["service_desk_enabled"]
-                        # TODO: project.forward_deployment_enabled
-                        # https://gitlab.com/gitlab-org/gitlab/-/issues/212621
                         # Maintainer group
                         if "maintainers_group" in project_dict:
                             # Get maintainers_group_id by maintainers_group
@@ -164,16 +190,45 @@ if __name__ == "__main__":
                         if "deploy_keys" in project_dict:
                             for deploy_key in project_dict["deploy_keys"]:
                                 key = project.keys.create({'title': deploy_key["title"], 'key': deploy_key["key"]})
+
                         # Deploy tokens
                         if "deploy_tokens" in project_dict:
                             for deploy_token in project_dict["deploy_tokens"]:
-                                # Tokens should be explicitly removed each time as revoked manually with the same name exist forever and cannot be detected revoked
+
+                                # Check if token needs to be created
+                                token_needs_to_be_created = True
                                 for token in project.deploytokens.list(all=True):
+
+                                    # Token revocation status could be only fetched from db, check and ignore revoked tokens
+                                    cur = conn.cursor()
+                                    sql = "SELECT revoked FROM deploy_tokens WHERE id = {id}".format(id=token.id)
+                                    try:
+                                        cur.execute(sql)
+                                        logger.info("Query execution status:")
+                                        logger.info(cur.statusmessage)
+                                        for row in cur:
+                                            token_revoked = row[0]
+                                    except Exception as e:
+                                        raise Exception("Caught exception on query execution")
+                                    cur.close()
+
+                                    # Skip if token is revoked
+                                    if token_revoked:
+                                        logger.info("Revoked token {token} skipped".format(token=token))
+                                        continue
+
+                                    # Set not needed if token with the same name found
                                     if token.name == deploy_token["name"]:
-                                        token.delete()
-                                token = project.deploytokens.create({'name': deploy_token["name"], 'scopes': deploy_token["scopes"]})
-                                logger.info("Project {project} deploy token added:".format(project=project_dict["path"]))
-                                logger.info(token)
+                                        token_needs_to_be_created = False
+                                
+                                # Finally create token if needed
+                                if token_needs_to_be_created:
+                                    token = project.deploytokens.create({'name': deploy_token["name"], 'scopes': deploy_token["scopes"]})
+                                    logger.info("Project {project} deploy token added:".format(project=project_dict["path"]))
+                                    logger.info(token)
+                                else:
+                                    logger.info("Project {project} deploy token {token_name} already exists".format(project=project_dict["path"], token_name=deploy_token["name"]))
+
                         # MR approval rules
                         if "approvals_before_merge" in project_dict:
                             p_mras = project.approvals.get()
@@ -199,6 +254,23 @@ if __name__ == "__main__":
                             p_mras = project.approvals.get()
                             p_mras.require_password_to_approve = project_dict["require_password_to_approve"]
                             p_mras.save()
+                        
+                        # Skip outdated deployment jobs
+                        if "skip_outdated_deployment_jobs" in project_dict:
+                            # This lacks api support, do db hack
+                            # https://gitlab.com/gitlab-org/gitlab/-/issues/212621
+                            cur = conn.cursor()
+                            sql = "UPDATE project_ci_cd_settings SET forward_deployment_enabled={f_d_e} WHERE project_id = {id}".format(f_d_e="true" if project_dict["skip_outdated_deployment_jobs"] else "false", id=project.id)
+                            try:
+                                cur.execute(sql)
+                                logger.info("Query execution status:")
+                                logger.info(cur.statusmessage)
+                                conn.commit()
+                            except Exception as e:
+                                raise Exception("Caught exception on query execution")
+                            cur.close()
+                            logger.info("Project skip_outdated_deployment_jobs set via db to {f_d_e}".format(f_d_e=project_dict["skip_outdated_deployment_jobs"]))
+
                         # Protected branches
                         if "protected_branches" in project_dict:
                             for branch in project_dict["protected_branches"]:
@@ -248,6 +320,7 @@ if __name__ == "__main__":
                                         'group_ids': g_ids
                                     }
                                 )
+
                         # Runners
                         if "specific_runners_enabled" in project_dict:
                             for runner_to_add in project_dict["specific_runners_enabled"]:
@@ -255,6 +328,7 @@ if __name__ == "__main__":
                                     if runner.description == runner_to_add:
                                         if not any(added_runner.description == runner_to_add for added_runner in project.runners.list(all=True)):
                                             project.runners.create({'runner_id': runner.id})
+
                         # Protected envs
                         if "protected_environments" in project_dict:
                             for env in project_dict["protected_environments"]:
@@ -272,7 +346,7 @@ if __name__ == "__main__":
                                 }
                                 script = textwrap.dedent(
                                     """
-                                    curl --request POST \
+                                    curl -sS --request POST \
                                             --header "PRIVATE-TOKEN: {private_token}" \
                                             --header "Content-Type: application/json" \
                                             --data '{data}' \
@@ -286,7 +360,19 @@ if __name__ == "__main__":
                                 )
                                 logger.info("Running bash script:")
                                 logger.info(script)
-                                subprocess.run(script, shell=True, universal_newlines=True, check=True, executable="/bin/bash")
+                                process = subprocess.run(script, shell=True, universal_newlines=True, check=False, executable="/bin/bash", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                if process.returncode:
+                                    logger.error("Check stdout:")
+                                    logger.error(process.stdout)
+                                    logger.error("Check stderr:")
+                                    logger.error(process.stderr)
+                                    raise SubprocessRunError("Subprocess run failed")
+                                else:
+                                    logger.info("Check stdout:")
+                                    logger.info(process.stdout)
+                                    logger.info("Check stderr:")
+                                    logger.info(process.stderr)
+
                         # CI Variables
                         if "variables" in project_dict:
                             # We cannot update vars as key for update is not scope safe, so we delete first if var state is not as needed
@@ -323,7 +409,18 @@ if __name__ == "__main__":
                                             )
                                             logger.info("Running bash script:")
                                             logger.info(script)
-                                            subprocess.run(script, shell=True, universal_newlines=True, check=True, executable="/bin/bash")
+                                            process = subprocess.run(script, shell=True, universal_newlines=True, check=False, executable="/bin/bash", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                            if process.returncode:
+                                                logger.error("Check stdout:")
+                                                logger.error(process.stdout)
+                                                logger.error("Check stderr:")
+                                                logger.error(process.stderr)
+                                                raise SubprocessRunError("Subprocess run failed")
+                                            else:
+                                                logger.info("Check stdout:")
+                                                logger.info(process.stdout)
+                                                logger.info("Check stderr:")
+                                                logger.info(process.stderr)
                                             logger.info("Var {scope} / {var} did not match yaml, deleted to be updated".format(scope=var["environment_scope"], var=var["key"]))
                             # Then save
                             project.save()
@@ -450,25 +547,45 @@ if __name__ == "__main__":
                     # Set needed project params
                     if not args.dry_run_gitlab:
 
-                        # Loop over repos (subpaths) inside project
-                        for repo in project.repositories.list(all=True):
-                            try:
-                                # Run bulk delete
-                                repo.tags.delete_in_bulk(
-                                    name_regex_delete=project_dict["bulk_delete_tags"]["name_regex_delete"],
-                                    name_regex_keep=project_dict["bulk_delete_tags"].get("name_regex_keep", None),
-                                    keep_n=project_dict["bulk_delete_tags"].get("keep_n", None),
-                                    older_than=project_dict["bulk_delete_tags"].get("older_than", None)
-                                )
-                                logger.info("delete_in_bulk run for {path}".format(path=repo.path))
-                            # GitLab allows bulk delete only once per hour so log and ignore
-                            except gitlab.exceptions.GitlabDeleteError as e:
-                                logger.exception(e)
+                        # Loop bulk_delete_tags rules:
+                        for rule in project_dict["bulk_delete_tags"]:
+
+                            logger.info("Rule {rule}".format(rule=rule))
+
+                            current_hour = datetime.datetime.today().hour
+                            if current_hour not in rule["run_on_hours"]:
+                                logger.info("Rule skipped because current hour {hour} is not in rule run_on_hours".format(hour=current_hour))
+                                continue
+
+                            # Loop over repos (subpaths) inside project
+                            for repo in project.repositories.list(all=True):
+
+                                # Check image_repo_regex
+                                if re.search(rule["image_repo_regex"], repo.path):
+
+                                    logger.info("Repo {repo} matched rule image_repo_regex {regex}".format(repo=repo.path, regex=rule["image_repo_regex"]))
+
+                                    # Delete tags
+                                    try:
+                                        # Run bulk delete
+                                        repo.tags.delete_in_bulk(
+                                            name_regex_delete=rule["name_regex_delete"],
+                                            name_regex_keep=rule.get("name_regex_keep", None),
+                                            keep_n=rule.get("keep_n", None),
+                                            older_than=rule.get("older_than", None)
+                                        )
+                                        logger.info("delete_in_bulk run for {path}".format(path=repo.path))
+                                    # GitLab allows bulk delete only once per hour so log and ignore
+                                    except gitlab.exceptions.GitlabDeleteError as e:
+                                        logger.exception(e)
+
+        # Close connection
+        conn.close()
 
     # Reroute catched exception to log
     except Exception as e:
         logger.exception(e)
-        logger.info("Finished {LOGO} with errors".format(LOGO=LOGO))
+        logger.error("Finished {LOGO} with errors in file {file}".format(LOGO=LOGO, file=args.yaml[0] if args.yaml is not None else WORK_DIR + "/" + PROJECTS_YAML))
         sys.exit(1)
 
     logger.info("Finished {LOGO}".format(LOGO=LOGO))
