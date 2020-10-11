@@ -377,8 +377,6 @@ if __name__ == "__main__":
                         if "variables" in project_dict:
                             # We cannot update vars as key for update is not scope safe, so we delete first if var state is not as needed
                             for var in project_dict["variables"]:
-                                #if any(project_var.key == var["key"] for project_var in project.variables.list(all=True)):
-                                #    project.variables.delete(id=var["key"], environment_scope=var["environment_scope"])
                                 for project_var in project.variables.list(all=True):
                                     if project_var.environment_scope == var["environment_scope"] and project_var.key == var["key"]:
                                         if (
