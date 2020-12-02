@@ -11,6 +11,11 @@ Add this repo as Git Submodule to a project:
 git submodule add --name .gitlab-admin -b master -- https://github.com/sysadmws/gitlab-admin .gitlab-admin
 ```
 
+Install python3 requirements:
+```
+pip3 install -r requirements.txt
+```
+
 ## `./settings.py`
 Setup global GitLab settings.
 

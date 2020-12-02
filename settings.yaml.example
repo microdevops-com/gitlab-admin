@@ -1,0 +1,12 @@
+gitlab:
+  url: https://gitlab.example.com
+settings: # https://docs.gitlab.com/ee/api/settings.html
+  signup_enabled: False
+  minimum_password_length: 24
+  require_two_factor_authentication: True
+  two_factor_grace_period: 24
+  user_default_external: False
+  auto_devops_enabled: False
+  shared_runners_enabled: False
+  first_day_of_week: 1 # Monday
+  time_tracking_limit_to_hours: True
