@@ -7,7 +7,9 @@ Env vars `PG_DB_HOST`, `PG_DB_NAME`, `PG_DB_USER`, `PG_DB_PASS` for access to Gi
 - `deploy_tokens`
 
 Add this repo as Git Submodule to a project:
+```
 git submodule add --name .gitlab-admin -b master -- https://github.com/sysadmws/gitlab-admin .gitlab-admin
+```
 
 ## `./settings.py`
 Setup global GitLab settings.
