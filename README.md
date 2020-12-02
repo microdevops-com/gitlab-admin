@@ -1,9 +1,13 @@
 # gitlab-admin
 
+## Setup
 Env var `GL_ADMIN_PRIVATE_TOKEN` needed to access GitLab as Admin to create and setup projects.
 Env vars `PG_DB_HOST`, `PG_DB_NAME`, `PG_DB_USER`, `PG_DB_PASS` for access to GitLab PostgreSQL DB are required to set these options (API lacks support):
 - `skip_outdated_deployment_jobs`
 - `deploy_tokens`
+
+Add this repo as Git Submodule to a project:
+git submodule add --name .gitlab-admin -b master -- https://github.com/sysadmws/gitlab-admin .gitlab-admin
 
 ## `./settings.py`
 Setup global GitLab settings.
