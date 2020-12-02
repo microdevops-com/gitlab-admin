@@ -18,6 +18,7 @@ pip3 install -r requirements.txt
 
 ## `./settings.py`
 Setup global GitLab settings.
+Run `./settings.py --apply-settings` to apply GitLab settings.
 
 ## `./projects.py`
 Setup multiple GitLab projects with settings defined by YAML, see [projects.yaml.example](projects.yaml.example) for example.
