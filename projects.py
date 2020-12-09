@@ -448,16 +448,26 @@ if __name__ == "__main__":
 
                             # Set othe params
                             pr.commit_committer_check = project_dict["push_rules"]["commit_committer_check"]
-                            pr.reject_unsigned_commits = project_dict["push_rules"]["reject_unsigned_commits"]
-                            pr.deny_delete_tag = project_dict["push_rules"]["deny_delete_tag"]
-                            pr.member_check = project_dict["push_rules"]["member_check"]
-                            pr.prevent_secrets = project_dict["push_rules"]["prevent_secrets"]
-                            pr.commit_message_regex = project_dict["push_rules"]["commit_message_regex"]
-                            pr.commit_message_negative_regex = project_dict["push_rules"]["commit_message_negative_regex"]
-                            pr.branch_name_regex = project_dict["push_rules"]["branch_name_regex"]
-                            pr.author_email_regex = project_dict["push_rules"]["author_email_regex"]
-                            pr.file_name_regex = project_dict["push_rules"]["file_name_regex"]
-                            pr.max_file_size = project_dict["push_rules"]["max_file_size"]
+                            if "reject_unsigned_commits" in project_dict["push_rules"]:
+                                pr.reject_unsigned_commits = project_dict["push_rules"]["reject_unsigned_commits"]
+                            if "deny_delete_tag" in project_dict["push_rules"]:
+                                pr.deny_delete_tag = project_dict["push_rules"]["deny_delete_tag"]
+                            if "member_check" in project_dict["push_rules"]:
+                                pr.member_check = project_dict["push_rules"]["member_check"]
+                            if "prevent_secrets" in project_dict["push_rules"]:
+                                pr.prevent_secrets = project_dict["push_rules"]["prevent_secrets"]
+                            if "commit_message_regex" in project_dict["push_rules"]:
+                                pr.commit_message_regex = project_dict["push_rules"]["commit_message_regex"]
+                            if "commit_message_negative_regex" in project_dict["push_rules"]:
+                                pr.commit_message_negative_regex = project_dict["push_rules"]["commit_message_negative_regex"]
+                            if "branch_name_regex" in project_dict["push_rules"]:
+                                pr.branch_name_regex = project_dict["push_rules"]["branch_name_regex"]
+                            if "author_email_regex" in project_dict["push_rules"]:
+                                pr.author_email_regex = project_dict["push_rules"]["author_email_regex"]
+                            if "file_name_regex" in project_dict["push_rules"]:
+                                pr.file_name_regex = project_dict["push_rules"]["file_name_regex"]
+                            if "max_file_size" in project_dict["push_rules"]:
+                                pr.max_file_size = project_dict["push_rules"]["max_file_size"]
                             pr.save()
 
                         # Save

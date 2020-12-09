@@ -78,6 +78,18 @@ projects:
         image_repo_regex: .*
         name_regex_delete: (?:^v\d+-\d+-\d+$|^master$)
         keep_n: 10 # optional
+    push_rules: # optional
+      commit_committer_check: False # requited, all other push_rules sub options are optional
+      reject_unsigned_commits: False
+      deny_delete_tag: False
+      member_check: False
+      prevent_secrets: False
+      commit_message_regex: ""
+      commit_message_negative_regex: ""
+      branch_name_regex: ""
+      author_email_regex: ""
+      file_name_regex: ""
+      max_file_size: 0
     variables: # optional
       - key: TEST1 # mandatory
         value: XXX1 # mandatory
