@@ -436,6 +436,30 @@ if __name__ == "__main__":
                                     project.variables.create(var_dict)
                                     logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
 
+                        # Push Rules
+                        if "push_rules" in project_dict:
+
+                            # Get existing rules, None if not exist
+                            pr = project.pushrules.get()
+                            if pr is None:
+                                # At least one option is required to create, use commit_committer_check
+                                project.pushrules.create({'commit_committer_check': project_dict["push_rules"]["commit_committer_check"]})
+                                pr = project.pushrules.get()
+
+                            # Set othe params
+                            pr.commit_committer_check = project_dict["push_rules"]["commit_committer_check"]
+                            pr.reject_unsigned_commits = project_dict["push_rules"]["reject_unsigned_commits"]
+                            pr.deny_delete_tag = project_dict["push_rules"]["deny_delete_tag"]
+                            pr.member_check = project_dict["push_rules"]["member_check"]
+                            pr.prevent_secrets = project_dict["push_rules"]["prevent_secrets"]
+                            pr.commit_message_regex = project_dict["push_rules"]["commit_message_regex"]
+                            pr.commit_message_negative_regex = project_dict["push_rules"]["commit_message_negative_regex"]
+                            pr.branch_name_regex = project_dict["push_rules"]["branch_name_regex"]
+                            pr.author_email_regex = project_dict["push_rules"]["author_email_regex"]
+                            pr.file_name_regex = project_dict["push_rules"]["file_name_regex"]
+                            pr.max_file_size = project_dict["push_rules"]["max_file_size"]
+                            pr.save()
+
                         # Save
                         project.save()
                     
