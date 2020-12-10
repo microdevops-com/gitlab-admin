@@ -23,7 +23,9 @@ projects:
         scopes:
           - read_registry
     shared_runners_enabled: False
+    merge_method: rebase_merge # optional: merge, rebase_merge, ff
     resolve_outdated_diff_discussions: True # optional
+    squash_commits_when_merging: require # optional: do_not_allow, allow, encourage, require
     only_allow_merge_if_pipeline_succeeds: True # optional
     only_allow_merge_if_all_discussions_are_resolved: True # optional
     skip_outdated_deployment_jobs: False # optional
