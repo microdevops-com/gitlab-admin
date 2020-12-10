@@ -4,6 +4,7 @@ gitlab:
   author_name: Commit Author
 projects:
   - path: dev/projects/subgroup/project1 # mandatory
+    name: Project1 # mandatory
     active: True # mandatory
     description: My Project # mandatory
     visibility: internal # mandatory

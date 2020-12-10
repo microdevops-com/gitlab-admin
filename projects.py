@@ -125,9 +125,8 @@ if __name__ == "__main__":
                                 group_id = group.id
                                 logger.info("Found group ID: {id}, name: {group}".format(group=group.full_name, id=group.id))
                         # Create project
-                        project_name = project_dict["path"].split("/")[-1]
                         if not args.dry_run_gitlab:
-                            project = gl.projects.create({'name': project_name, 'namespace_id': group_id})
+                            project = gl.projects.create({'name': project_dict["name"], 'namespace_id': group_id})
                             # Add first files on creating
                             f = project.files.create(
                                 {
@@ -142,6 +141,7 @@ if __name__ == "__main__":
 
                     # Set needed project params
                     if not args.dry_run_gitlab:
+                        project.name = project_dict["name"]
                         project.description = project_dict["description"]
                         project.visibility = project_dict["visibility"]
                         if "resolve_outdated_diff_discussions" in project_dict:
