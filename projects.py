@@ -162,30 +162,29 @@ if __name__ == "__main__":
                             project.approvals_before_merge = project_dict["approvals_before_merge"]
                         if "service_desk_enabled" in project_dict:
                             project.service_desk_enabled = project_dict["service_desk_enabled"]
-                        # Maintainer group
-                        if "maintainers_group" in project_dict:
-                            # Get maintainers_group_id by maintainers_group
-                            # Search groups by last name before project and match full path
-                            group_name = project_dict["maintainers_group"].split("/")[-1]
-                            group_id = None
-                            for group in gl.groups.list(search=group_name):
-                                if group.full_path == project_dict["maintainers_group"]:
-                                    group_id = group.id
-                                    logger.info("Found group ID: {id}, name: {group}".format(group=group.full_name, id=group.id))
-                            if not any(shared_group["group_id"] == group_id for shared_group in project.shared_with_groups):
-                                project.share(group_id, gitlab.MAINTAINER_ACCESS)
                         # Members
                         if "members" in project_dict:
                             for member in project_dict["members"]:
-                                user_id = gl.users.list(username=member["user"])[0].id
-                                logger.info("Found user ID: {id}, name: {user}".format(id=user_id, user=member["user"]))
-                                try:
-                                    current_member = project.members.get(user_id)
-                                    current_member.access_level = member["access_level"]
-                                    current_member.save()
-                                except gitlab.exceptions.GitlabGetError as e:
-                                    member = project.members.create({'user_id': user_id, 'access_level': member["access_level"]})
-                                    member.save()
+                                if "user" in member:
+                                    user_id = gl.users.list(username=member["user"])[0].id
+                                    logger.info("Found user ID: {id}, name: {user}".format(id=user_id, user=member["user"]))
+                                    try:
+                                        current_member = project.members.get(user_id)
+                                        current_member.access_level = member["access_level"]
+                                        current_member.save()
+                                    except gitlab.exceptions.GitlabGetError as e:
+                                        member = project.members.create({'user_id': user_id, 'access_level': member["access_level"]})
+                                        member.save()
+                                if "group" in member:
+                                    # Search groups by last name before project and match full path
+                                    group_name = member["group"].split("/")[-1]
+                                    group_id = None
+                                    for group in gl.groups.list(search=group_name):
+                                        if group.full_path == member["group"]:
+                                            group_id = group.id
+                                            logger.info("Found group ID: {id}, name: {group}".format(group=group.full_name, id=group.id))
+                                    if not any(shared_group["group_id"] == group_id for shared_group in project.shared_with_groups):
+                                        project.share(group_id, member["access_level"])
                         # Deploy keys
                         if "deploy_keys" in project_dict:
                             for deploy_key in project_dict["deploy_keys"]:
