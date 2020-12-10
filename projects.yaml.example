@@ -11,8 +11,8 @@ projects:
     members: # optional
       - user: bot1
         access_level: 10 # 10 - guest, 20 - reporter, 30 - developer, 40 - maintainer
-      - group: group1
-        access_level: 10
+      - group: dev/group1
+        access_level: 30
     deploy_keys: # optional
       - title: root@srv1.example.com
         key: ssh-ed25519 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA root@srv1.example.com
