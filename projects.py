@@ -417,7 +417,7 @@ if __name__ == "__main__":
                                 else:
                                     project_dict_variables.append(var)
                             # Check variables_clean_all_before_set
-                            if "variables_clean_all_before_set" in project_dict:
+                            if "variables_clean_all_before_set" in project_dict and project_dict["variables_clean_all_before_set"]:
                                 for project_var in project.variables.list(all=True):
                                     # There is a bug (at least at python-gitlab 2.5.0):
                                     # gitlab.exceptions.GitlabDeleteError: 409: There are multiple variables with provided parameters. Please use 'filter[environment_scope]'
