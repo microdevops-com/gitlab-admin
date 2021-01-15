@@ -108,8 +108,18 @@ projects:
         protected: True # mandatory
         masked: False # mandatory
         environment_scope: 'staging' # mandatory
-      - key: TEST1 # mandatory, we can have the same var in different scopes
-        value: XXX1 # mandatory
+      - key: TEST_TRUE
+        value: "true" # do not put yaml boolean in value as GitLab vars are not boolean compatible, it will save them as "true" and "false" strings, put the same here
+        variable_type: env_var
+        protected: True
+        masked: False
+        environment_scope: 'prod' # mandatory
+      - key: TEST_FALSE
+        value: "false" # do not put yaml boolean in value as GitLab vars are not boolean compatible, it will save them as "true" and "false" strings, put the same here
+        variable_type: env_var
+        protected: True
+        masked: False
+        environment_scope: 'prod' # mandatory
       - variable_type: env_var # mandatory, env_var or file
         protected: True # mandatory
         masked: False # mandatory
@@ -117,3 +127,6 @@ projects:
         key_values: # another more compact format to set multiple key-values for the same scope, type of var
           TEST1: XXX1
           TEST2: XXX2
+          TEST3: XXX3
+          TEST4: XXX4
+          TEST5: XXX5
