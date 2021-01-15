@@ -94,6 +94,7 @@ projects:
       author_email_regex: ""
       file_name_regex: ""
       max_file_size: 0
+    variables_clean_all_before_set: False # optional, delete all variables before setting, useful to clean garbage
     variables: # optional
       - key: TEST1 # mandatory
         value: XXX1 # mandatory
@@ -107,3 +108,12 @@ projects:
         protected: True # mandatory
         masked: False # mandatory
         environment_scope: 'staging' # mandatory
+      - key: TEST1 # mandatory, we can have the same var in different scopes
+        value: XXX1 # mandatory
+      - variable_type: env_var # mandatory, env_var or file
+        protected: True # mandatory
+        masked: False # mandatory
+        environment_scope: 'dev/my-*' # mandatory
+        key_values: # another more compact format to set multiple key-values for the same scope, type of var
+          TEST1: XXX1
+          TEST2: XXX2

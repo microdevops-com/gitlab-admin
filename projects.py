@@ -399,55 +399,107 @@ if __name__ == "__main__":
 
                         # CI Variables
                         if "variables" in project_dict:
-                            # We cannot update vars as key for update is not scope safe, so we delete first if var state is not as needed
+                            # Expand quick key_values sets
+                            project_dict_variables = []
                             for var in project_dict["variables"]:
+                                if "key_values" in var:
+                                    for k, v in var["key_values"].items():
+                                        project_dict_variables.append(
+                                            {
+                                                "variable_type": var["variable_type"],
+                                                "protected": var["protected"],
+                                                "masked": var["masked"],
+                                                "environment_scope": var["environment_scope"],
+                                                "key": k,
+                                                "value": v
+                                            }
+                                        )
+                                else:
+                                    project_dict_variables.append(var)
+                            # Check variables_clean_all_before_set
+                            if "variables_clean_all_before_set" in project_dict:
                                 for project_var in project.variables.list(all=True):
-                                    if project_var.environment_scope == var["environment_scope"] and project_var.key == var["key"]:
-                                        if (
-                                            project_var.value != str(var["value"])
-                                            or
-                                            project_var.variable_type != var["variable_type"] 
-                                            or
-                                            project_var.protected != var["protected"]
-                                            or
-                                            project_var.masked != var["masked"]
-                                            ):
-                                            # project_var.delete()
-                                            # There is a bug (at least at python-gitlab 2.5.0):
-                                            # gitlab.exceptions.GitlabDeleteError: 409: There are multiple variables with provided parameters. Please use 'filter[environment_scope]'
-                                            # So delete via direct curl API call
-                                            script = textwrap.dedent(
-                                                """
-                                                curl --request DELETE \
-                                                        --header "PRIVATE-TOKEN: {private_token}" \
-                                                        "{gitlab_url}/api/v4/projects/{path_with_namespace_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
-                                                """
-                                            ).format(
-                                                gitlab_url=projects_yaml_dict["gitlab"]["url"],
-                                                private_token=GL_ADMIN_PRIVATE_TOKEN,
-                                                path_with_namespace_encoded=project.path_with_namespace.replace("/", "%2F"),
-                                                key=var["key"],
-                                                environment_scope=var["environment_scope"].replace("*", "%2A")
-                                            )
-                                            logger.info("Running bash script:")
-                                            logger.info(script)
-                                            process = subprocess.run(script, shell=True, universal_newlines=True, check=False, executable="/bin/bash", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                                            if process.returncode:
-                                                logger.error("Check stdout:")
-                                                logger.error(process.stdout)
-                                                logger.error("Check stderr:")
-                                                logger.error(process.stderr)
-                                                raise SubprocessRunError("Subprocess run failed")
-                                            else:
-                                                logger.info("Check stdout:")
-                                                logger.info(process.stdout)
-                                                logger.info("Check stderr:")
-                                                logger.info(process.stderr)
-                                            logger.info("Var {scope} / {var} did not match yaml, deleted to be updated".format(scope=var["environment_scope"], var=var["key"]))
+                                    # There is a bug (at least at python-gitlab 2.5.0):
+                                    # gitlab.exceptions.GitlabDeleteError: 409: There are multiple variables with provided parameters. Please use 'filter[environment_scope]'
+                                    # So delete via direct curl API call
+                                    script = textwrap.dedent(
+                                        """
+                                        curl --request DELETE \
+                                                --header "PRIVATE-TOKEN: {private_token}" \
+                                                "{gitlab_url}/api/v4/projects/{path_with_namespace_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
+                                        """
+                                    ).format(
+                                        gitlab_url=projects_yaml_dict["gitlab"]["url"],
+                                        private_token=GL_ADMIN_PRIVATE_TOKEN,
+                                        path_with_namespace_encoded=project.path_with_namespace.replace("/", "%2F"),
+                                        key=project_var.key,
+                                        environment_scope=project_var.environment_scope.replace("*", "%2A")
+                                    )
+                                    logger.info("Running bash script:")
+                                    logger.info(script)
+                                    process = subprocess.run(script, shell=True, universal_newlines=True, check=False, executable="/bin/bash", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                    if process.returncode:
+                                        logger.error("Check stdout:")
+                                        logger.error(process.stdout)
+                                        logger.error("Check stderr:")
+                                        logger.error(process.stderr)
+                                        raise SubprocessRunError("Subprocess run failed")
+                                    else:
+                                        logger.info("Check stdout:")
+                                        logger.info(process.stdout)
+                                        logger.info("Check stderr:")
+                                        logger.info(process.stderr)
+                                    logger.info("Deleting var {scope} / {var} because of variables_clean_all_before_set".format(scope=project_var.environment_scope, var=project_var.key))
+                            else:
+                                # We cannot update vars as key for update is not scope safe, so we delete first if var state is not as needed
+                                for var in project_dict_variables:
+                                    for project_var in project.variables.list(all=True):
+                                        if project_var.environment_scope == var["environment_scope"] and project_var.key == var["key"]:
+                                            if (
+                                                project_var.value != str(var["value"])
+                                                or
+                                                project_var.variable_type != var["variable_type"] 
+                                                or
+                                                project_var.protected != var["protected"]
+                                                or
+                                                project_var.masked != var["masked"]
+                                                ):
+                                                # project_var.delete()
+                                                # There is a bug (at least at python-gitlab 2.5.0):
+                                                # gitlab.exceptions.GitlabDeleteError: 409: There are multiple variables with provided parameters. Please use 'filter[environment_scope]'
+                                                # So delete via direct curl API call
+                                                script = textwrap.dedent(
+                                                    """
+                                                    curl --request DELETE \
+                                                            --header "PRIVATE-TOKEN: {private_token}" \
+                                                            "{gitlab_url}/api/v4/projects/{path_with_namespace_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
+                                                    """
+                                                ).format(
+                                                    gitlab_url=projects_yaml_dict["gitlab"]["url"],
+                                                    private_token=GL_ADMIN_PRIVATE_TOKEN,
+                                                    path_with_namespace_encoded=project.path_with_namespace.replace("/", "%2F"),
+                                                    key=var["key"],
+                                                    environment_scope=var["environment_scope"].replace("*", "%2A")
+                                                )
+                                                logger.info("Running bash script:")
+                                                logger.info(script)
+                                                process = subprocess.run(script, shell=True, universal_newlines=True, check=False, executable="/bin/bash", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                                if process.returncode:
+                                                    logger.error("Check stdout:")
+                                                    logger.error(process.stdout)
+                                                    logger.error("Check stderr:")
+                                                    logger.error(process.stderr)
+                                                    raise SubprocessRunError("Subprocess run failed")
+                                                else:
+                                                    logger.info("Check stdout:")
+                                                    logger.info(process.stdout)
+                                                    logger.info("Check stderr:")
+                                                    logger.info(process.stderr)
+                                                logger.info("Var {scope} / {var} did not match yaml, deleted to be updated".format(scope=var["environment_scope"], var=var["key"]))
                             # Then save
                             project.save()
                             # And add again, adding is scope safe
-                            for var in project_dict["variables"]:
+                            for var in project_dict_variables:
                                 if not any(project_var.environment_scope == var["environment_scope"] and project_var.key == var["key"] for project_var in project.variables.list(all=True)):
                                     var_dict = {
                                         "key": var["key"],
