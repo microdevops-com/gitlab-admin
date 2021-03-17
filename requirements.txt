@@ -1,3 +1,5 @@
 python-gitlab==2.5.0
 PyYAML==5.3.1
 psycopg2-binary==2.8.6
+jira==2.0.0
+ipython

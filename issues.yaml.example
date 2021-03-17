@@ -1,0 +1,32 @@
+gitlab:
+  url: https://gitlab.example.com
+# Jira to GitLab Issues Importer config. The following properties are migrated:
+# - Title
+# - Original Jira Issue URL
+# - Checklist
+# - Comments
+# - Jira Account ids mentions converted to text names
+# - Assignee
+# - Priority as Label Priority::Value
+# - Labels
+# - Due Date
+# - Created Date
+# - Updated Date
+# - Status
+# - Parent as Epic
+import_issues_from_jira:
+  jira:
+    url: https://example.atlassian.net
+    user: admin@example.com
+  search_issues: project=DEVOPS # jql to select issues to import
+  gitlab_project_id: 21 # id of needed project
+  name_map: # Map Jira to GitLab users by name, only assignees for now, used as is if not found in map
+    Name1 Surname1: Name2 Surname2
+  label_map: # Map Jira to GitLab labels, used as is if not found in map
+    DevOps: DEVOPS
+  parent_to_epic_map: # Map Jira Parent to GitLab Epic Id, mandatory
+    DEVOPS-302: 1
+  status_to_label_map: # Map Jira Status to GitLab Label
+    Backlog: Backlog
+    To Do: To Do
+    Doing: Doing
