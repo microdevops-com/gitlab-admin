@@ -161,16 +161,17 @@ if __name__ == "__main__":
 
                 # Assignee
                 # Apply name_map
-                if "name_map" in issues_yaml_dict["import_issues_from_jira"]:
-                    if jira_issue.fields.assignee.displayName in issues_yaml_dict["import_issues_from_jira"]["name_map"]:
-                        display_name_to_search = issues_yaml_dict["import_issues_from_jira"]["name_map"][jira_issue.fields.assignee.displayName]
-                    else:
-                        display_name_to_search = jira_issue.fields.assignee.displayName
-                # Get list by name search
-                gl_assignee_user_list = gl.users.list(search=display_name_to_search)
-                # Search by Name - the only always existing field and make sure exact search
-                if len(gl_assignee_user_list) and gl_assignee_user_list[0].name == display_name_to_search:
-                    gitlab_issue_data["assignee_ids"] = [gl_assignee_user_list[0].id]
+                if jira_issue.fields.assignee is not None:
+                    if "name_map" in issues_yaml_dict["import_issues_from_jira"]:
+                        if jira_issue.fields.assignee.displayName in issues_yaml_dict["import_issues_from_jira"]["name_map"]:
+                            display_name_to_search = issues_yaml_dict["import_issues_from_jira"]["name_map"][jira_issue.fields.assignee.displayName]
+                        else:
+                            display_name_to_search = jira_issue.fields.assignee.displayName
+                    # Get list by name search
+                    gl_assignee_user_list = gl.users.list(search=display_name_to_search)
+                    # Search by Name - the only always existing field and make sure exact search
+                    if len(gl_assignee_user_list) and gl_assignee_user_list[0].name == display_name_to_search:
+                        gitlab_issue_data["assignee_ids"] = [gl_assignee_user_list[0].id]
 
                 # Priority Labels
                 gitlab_issue_data["labels"] = "Priority::" + jira_issue.fields.priority.name
@@ -191,20 +192,22 @@ if __name__ == "__main__":
                     gitlab_issue_data["epic_id"] = issues_yaml_dict["import_issues_from_jira"]["parent_to_epic_map"][jira_issue.fields.parent.key]
 
                 # Description
-                gitlab_issue_data["description"] += jira_to_md(jira_issue.fields.description)
-                gitlab_issue_data["description"] += "\n"
+                if jira_issue.fields.description is not None:
+                    gitlab_issue_data["description"] += jira_to_md(jira_issue.fields.description)
+                    gitlab_issue_data["description"] += "\n"
 
                 # Checklist
-                for checklist_item in getattr(jira_issue.fields, jira_fields_name_map["Checklist Text"]).splitlines():
+                if getattr(jira_issue.fields, jira_fields_name_map["Checklist Text"]) is not None:
+                    for checklist_item in getattr(jira_issue.fields, jira_fields_name_map["Checklist Text"]).splitlines():
 
-                    # Check first 5 symbols in item - check mark
-                    if checklist_item[0:5] == "* [x]":
-                        gitlab_issue_data["description"] += "- [x] "
-                        gitlab_issue_data["description"] += jira_to_md(checklist_item[6:])
-                    else:
-                        gitlab_issue_data["description"] += "- [ ] "
-                        gitlab_issue_data["description"] += jira_to_md(checklist_item[3:])
-                    gitlab_issue_data["description"] += "\n"
+                        # Check first 5 symbols in item - check mark
+                        if checklist_item[0:5] == "* [x]":
+                            gitlab_issue_data["description"] += "- [x] "
+                            gitlab_issue_data["description"] += jira_to_md(checklist_item[6:])
+                        else:
+                            gitlab_issue_data["description"] += "- [ ] "
+                            gitlab_issue_data["description"] += jira_to_md(checklist_item[2:])
+                        gitlab_issue_data["description"] += "\n"
                 
                 # Status to Label
                 if "status_to_label_map" in issues_yaml_dict["import_issues_from_jira"] and jira_issue.fields.status.name in issues_yaml_dict["import_issues_from_jira"]["status_to_label_map"]:
