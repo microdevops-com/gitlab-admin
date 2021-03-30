@@ -10,7 +10,7 @@ projects:
     visibility: internal # mandatory
     members: # optional
       - user: bot1
-        access_level: 10 # 10 - guest, 20 - reporter, 30 - developer, 40 - maintainer
+        access_level: 10 # 0 - noone, 10 - guest, 20 - reporter, 30 - developer, 40 - maintainer
       - group: dev/group1
         access_level: 30
     deploy_keys: # optional
