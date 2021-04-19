@@ -117,6 +117,7 @@ if __name__ == "__main__":
                         # Search for the group
                         # Split and join up to last slash project path
                         group_full_path = "/".join(project_dict["path"].split("/")[:-1])
+                        project_path = project_dict["path"].split("/")[-1]
                         # Search groups by last name before project and match full path
                         group_name = project_dict["path"].split("/")[-2]
                         group_id = None
@@ -126,7 +127,7 @@ if __name__ == "__main__":
                                 logger.info("Found group ID: {id}, name: {group}".format(group=group.full_name, id=group.id))
                         # Create project
                         if not args.dry_run_gitlab:
-                            project = gl.projects.create({'name': project_dict["name"], 'namespace_id': group_id})
+                            project = gl.projects.create({'name': project_dict["name"], 'namespace_id': group_id, 'path': project_path})
                             # Add first files on creating
                             f = project.files.create(
                                 {
@@ -175,8 +176,8 @@ if __name__ == "__main__":
                                         current_member.access_level = member["access_level"]
                                         current_member.save()
                                     except gitlab.exceptions.GitlabGetError as e:
-                                        member = project.members.create({'user_id': user_id, 'access_level': member["access_level"]})
-                                        member.save()
+                                        gl_member = project.members.create({'user_id': user_id, 'access_level': member["access_level"]})
+                                        gl_member.save()
                                 if "group" in member:
                                     # Search groups by last name before project and match full path
                                     group_name = member["group"].split("/")[-1]
