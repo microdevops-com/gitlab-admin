@@ -33,6 +33,23 @@ projects:
     wiki_enabled: False # optional
     packages_enabled: False # optional
     service_desk_enabled: False # optional
+    auto_devops_enabled: False # optional
+    container_registry_enabled: False # optional
+    jobs_enabled: False # optional
+    lfs_enabled: False # optional
+    merge_requests_enabled: False # optional
+    snippets_enabled: False # optional
+    analytics_access_level: disabled # optional
+    builds_access_level: disabled # optional
+    forking_access_level: disabled # optional
+    issues_access_level: disabled # optional
+    merge_requests_access_level: disabled # optional
+    operations_access_level: disabled # optional
+    pages_access_level: disabled # optional
+    requirements_access_level: disabled # optional
+    repository_access_level: disabled # optional
+    snippets_access_level: disabled # optional
+    wiki_access_level: disabled # optional
     approvals_before_merge: 1 # optional
     reset_approvals_on_push: True # optional
     disable_overriding_approvers_per_merge_request: True # optional

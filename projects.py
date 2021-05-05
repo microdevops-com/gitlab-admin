@@ -165,6 +165,46 @@ if __name__ == "__main__":
                             project.approvals_before_merge = project_dict["approvals_before_merge"]
                         if "service_desk_enabled" in project_dict:
                             project.service_desk_enabled = project_dict["service_desk_enabled"]
+                        if "auto_devops_enabled" in project_dict:
+                            project.auto_devops_enabled = project_dict["auto_devops_enabled"]
+                        if "container_registry_enabled" in project_dict:
+                            project.container_registry_enabled = project_dict["container_registry_enabled"]
+                        if "jobs_enabled" in project_dict:
+                            project.jobs_enabled = project_dict["jobs_enabled"]
+                        if "jobs_enabled" in project_dict:
+                            project.jobs_enabled = project_dict["jobs_enabled"]
+                        if "lfs_enabled" in project_dict:
+                            project.lfs_enabled = project_dict["lfs_enabled"]
+                        if "merge_requests_enabled" in project_dict:
+                            project.merge_requests_enabled = project_dict["merge_requests_enabled"]
+                        if "snippets_enabled" in project_dict:
+                            project.snippets_enabled = project_dict["snippets_enabled"]
+                        if "analytics_access_level" in project_dict:
+                            project.analytics_access_level = project_dict["analytics_access_level"]
+                        if "builds_access_level" in project_dict:
+                            project.builds_access_level = project_dict["builds_access_level"]
+                        if "forking_access_level" in project_dict:
+                            project.forking_access_level = project_dict["forking_access_level"]
+                        if "issues_access_level" in project_dict:
+                            project.issues_access_level = project_dict["issues_access_level"]
+                        if "merge_requests_access_level" in project_dict:
+                            project.merge_requests_access_level = project_dict["merge_requests_access_level"]
+                        if "operations_access_level" in project_dict:
+                            project.operations_access_level = project_dict["operations_access_level"]
+                        if "pages_access_level" in project_dict:
+                            project.pages_access_level = project_dict["pages_access_level"]
+                        if "requirements_access_level" in project_dict:
+                            project.requirements_access_level = project_dict["requirements_access_level"]
+                        if "snippets_access_level" in project_dict:
+                            project.snippets_access_level = project_dict["snippets_access_level"]
+                        if "wiki_access_level" in project_dict:
+                            project.wiki_access_level = project_dict["wiki_access_level"]
+                        if "repository_access_level" in project_dict:
+                            project.repository_access_level = project_dict["repository_access_level"]
+                            # Otherwise error
+                            if project_dict["repository_access_level"] == "disabled":
+                                project.merge_requests_access_level = "disabled"
+                                project.builds_access_level = "disabled"
                         # Members
                         if "members" in project_dict:
                             for member in project_dict["members"]:
@@ -562,12 +602,20 @@ if __name__ == "__main__":
                     logger.info(project.protectedtags.list(all=True))
                     logger.info("Project {project} runners:".format(project=project_dict["path"]))
                     logger.info(project.runners.list(all=True))
-                    logger.info("Project {project} environments:".format(project=project_dict["path"]))
-                    logger.info(project.environments.list(all=True))
-                    logger.info("Project {project} variables:".format(project=project_dict["path"]))
-                    logger.info(project.variables.list(all=True))
-                    for project_var in project.variables.list(all=True):
-                        logger.info(project_var)
+                    # These are not available when jobs disabled
+                    if not (
+                        ("jobs_enabled" in project_dict and not project_dict["jobs_enabled"])
+                        or
+                        ("builds_access_level" in project_dict and project_dict["builds_access_level"] == "disabled")
+                        or
+                        ("repository_access_level" in project_dict and project_dict["repository_access_level"] == "disabled")
+                    ):
+                        logger.info("Project {project} environments:".format(project=project_dict["path"]))
+                        logger.info(project.environments.list(all=True))
+                        logger.info("Project {project} variables:".format(project=project_dict["path"]))
+                        logger.info(project.variables.list(all=True))
+                        for project_var in project.variables.list(all=True):
+                            logger.info(project_var)
             
         if args.template_projects:
             
