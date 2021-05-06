@@ -29,3 +29,9 @@ Run `./projects.py --template-projects` to update templates within via git.
 Git is used via local cmd run.
 
 Run `./projects.py --bulk-delete-tags-in-projects` to bulk delete docker registry tags by rules defined in YAML.
+
+## `./issues.py`
+Import issues or epics from Jira, rules defined by YAML, see [issues.yaml.example](issues.yaml.example) for example.
+
+Run `./issues.py --import-epics-from-jira` to import epics.
+Run `./issues.py --import-issues-from-jira` to import issues.
