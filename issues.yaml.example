@@ -1,6 +1,6 @@
 gitlab:
   url: https://gitlab.example.com
-# Jira to GitLab Issues Importer config. The following properties are migrated:
+# Jira to GitLab Issues/Epics Importer config. The following properties are migrated:
 # - Title
 # - Original Jira Issue URL
 # - Checklist
@@ -14,12 +14,20 @@ gitlab:
 # - Updated Date
 # - Status
 # - Parent as Epic
+import_epics_from_jira
+  jira:
+    url: https://example.atlassian.net
+    user: admin@example.com
+  search_issues: project=MNG&issuetype=epic # jsql to select issues of type epic to import
+  gitlab_group_path: example/devops # group path to migrate epics to
 import_issues_from_jira:
   jira:
     url: https://example.atlassian.net
     user: admin@example.com
   search_issues: project=DEVOPS # jql to select issues to import
-  gitlab_project_id: 21 # id of needed project
+  ##search_issues: project=DEVOPS&issue=DEVOPS-123 - example to try one issue migration
+  gitlab_group_path: example/devops # group path to search epics for to assign for issues
+  gitlab_project_path: example/devops/general # path of project to mirgate issues to
   name_map: # Map Jira to GitLab users by name, only assignees for now, used as is if not found in map
     Name1 Surname1: Name2 Surname2
   label_map: # Map Jira to GitLab labels, used as is if not found in map
@@ -30,3 +38,5 @@ import_issues_from_jira:
     Backlog: Backlog
     To Do: To Do
     Doing: Doing
+  skip_issues: # skip migration of some issues
+    - DEVOPS-303

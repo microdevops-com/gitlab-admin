@@ -75,6 +75,7 @@ if __name__ == "__main__":
     parser.add_argument("--yaml", dest="yaml", help="use file FILE instead of default issues.yaml", nargs=1, metavar=("FILE"))
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--import-issues-from-jira", dest="import_issues_from_jira", help="import issues from jira with rules defined in yaml", action="store_true")
+    group.add_argument("--import-epics-from-jira", dest="import_epics_from_jira", help="import issues as epics from jira with rules defined in yaml", action="store_true")
     args = parser.parse_args()
 
     # Set logger and console debug
@@ -112,6 +113,122 @@ if __name__ == "__main__":
         
         # Do tasks
 
+        if args.import_epics_from_jira:
+            
+            # Connect to GitLab
+            gl = gitlab.Gitlab(issues_yaml_dict["gitlab"]["url"], private_token=GL_ADMIN_PRIVATE_TOKEN)
+            gl.auth()
+
+            # Connect to Jira
+            jira = jira.JIRA(issues_yaml_dict["import_epics_from_jira"]["jira"]["url"], basic_auth=(issues_yaml_dict["import_epics_from_jira"]["jira"]["user"], JIRA_PRIVATE_TOKEN))
+
+            # Jira custom fields map
+            jira_fields = jira.fields()
+            jira_fields_name_map = {jira.field["name"]:jira.field["id"] for jira.field in jira_fields}
+
+            # Get gitlab group
+            group_name = issues_yaml_dict["import_epics_from_jira"]["gitlab_group_path"].split("/")[-1]
+            for group in gl.groups.list(search=group_name):
+                if group.full_path == issues_yaml_dict["import_epics_from_jira"]["gitlab_group_path"]:
+                    gitlab_group = group
+            logger.info("Found group ID: {id}, name: {group}".format(group=gitlab_group.full_name, id=gitlab_group.id))
+
+            # Search jira issues
+            jira_issues = jira.search_issues(issues_yaml_dict["import_epics_from_jira"]["search_issues"], maxResults=None)
+
+            # Iterate issues in jira
+            for jira_issue in jira_issues:
+
+                logger.info("Importing Jira issue: {jira_issue_key}".format(jira_issue_key=jira_issue.key))
+
+                # Prepare data for gitlab epic
+                gitlab_epic_data = {}
+
+                # Title
+                gitlab_epic_data["title"] = jira_issue.fields.summary
+
+                # Created at
+                gitlab_epic_data["created_at"] = jira_issue.fields.created
+
+                # Jira original issue
+                gitlab_epic_data["description"] = "Jira Link: {jira_url}/browse/{key}\n\n".format(jira_url=issues_yaml_dict["import_epics_from_jira"]["jira"]["url"], key=jira_issue.key)
+
+                # Jira Reporter
+                gitlab_epic_data["description"] += "Jira Reporter: {reporter}\n\n".format(reporter=jira_issue.fields.reporter.displayName)
+
+                # Jira attachment links
+                expanded_att_jira_issue = jira.issue(jira_issue.key, expand="attachment")
+                if len(expanded_att_jira_issue.fields.attachment):
+                    gitlab_epic_data["description"] += "Jira Attachments:\n"
+                    for att in expanded_att_jira_issue.fields.attachment:
+                        gitlab_epic_data["description"] += "- {content}\n".format(content=att.content)
+                    gitlab_epic_data["description"] += "\n"
+
+                # Priority Labels
+                gitlab_epic_data["labels"] = "Priority::" + jira_issue.fields.priority.name
+
+                # Due Date
+                gitlab_epic_data["due_date_fixed"] = jira_issue.fields.duedate
+
+                # Labels
+                for label in jira_issue.fields.labels:
+                    if "label_map" in issues_yaml_dict["import_epics_from_jira"]:
+                        if label in issues_yaml_dict["import_epics_from_jira"]["label_map"]:
+                            gitlab_epic_data["labels"] += "," + issues_yaml_dict["import_epics_from_jira"]["label_map"][label]
+                        else:
+                            gitlab_epic_data["labels"] += "," + label
+
+                # Description
+                if jira_issue.fields.description is not None:
+                    gitlab_epic_data["description"] += jira_to_md(jira_issue.fields.description)
+                    gitlab_epic_data["description"] += "\n"
+
+                # Checklist
+                if getattr(jira_issue.fields, jira_fields_name_map["Checklist Text"]) is not None:
+                    for checklist_item in getattr(jira_issue.fields, jira_fields_name_map["Checklist Text"]).splitlines():
+
+                        # Check first 5 symbols in item - check mark
+                        if checklist_item[0:5] == "* [x]":
+                            gitlab_epic_data["description"] += "- [x] "
+                            gitlab_epic_data["description"] += jira_to_md(checklist_item[6:])
+                        else:
+                            gitlab_epic_data["description"] += "- [ ] "
+                            gitlab_epic_data["description"] += jira_to_md(checklist_item[2:])
+                        gitlab_epic_data["description"] += "\n"
+                
+                # Status to Label
+                if "status_to_label_map" in issues_yaml_dict["import_epics_from_jira"] and jira_issue.fields.status.name in issues_yaml_dict["import_epics_from_jira"]["status_to_label_map"]:
+                    gitlab_epic_data["labels"] += "," + issues_yaml_dict["import_epics_from_jira"]["status_to_label_map"][jira_issue.fields.status.name]
+                else:
+                    if jira_issue.fields.status.name != "Done":
+                        logger.info("Status {status} not found in status_to_label_map".format(status=jira_issue.fields.status.name))
+                    
+                # Create issue in gitlab
+                gitlab_epic = gitlab_group.epics.create(gitlab_epic_data)
+                logger.info("GitLab Epic created: {web_url}".format(web_url=gitlab_epic.web_url))
+
+                # Comments
+                expanded_comments_jira_issue = jira.issue(jira_issue.key, expand="changelog", fields="comment")
+                for comment in expanded_comments_jira_issue.raw["fields"]["comment"]["comments"]:
+                    comment_body = comment["author"]["displayName"]
+                    if "emailAddress" in comment["author"]:
+                        comment_body += " (" + comment["author"]["emailAddress"] + ")"
+                        comment_body += ":\n\n"
+                    comment_body += jira_to_md(comment["body"])
+                    gitlab_epic.notes.create({"body": comment_body, "created_at": comment["created"]})
+
+                # State
+                if jira_issue.fields.status.name == "Done":
+                    gitlab_epic.state_event = "close"
+
+                # Updated at
+                gitlab_epic.updated_at = jira_issue.fields.updated
+
+                # Save
+                # Dump attr change otherwise save may produce errors
+                gitlab_epic.title = jira_issue.fields.summary
+                gitlab_epic.save()
+
         if args.import_issues_from_jira:
             
             # Connect to GitLab
@@ -126,7 +243,7 @@ if __name__ == "__main__":
             jira_fields_name_map = {jira.field["name"]:jira.field["id"] for jira.field in jira_fields}
 
             # Get gitlab project
-            gitlab_project = gl.projects.get(issues_yaml_dict["import_issues_from_jira"]["gitlab_project_id"])
+            gitlab_project = gl.projects.get(issues_yaml_dict["import_issues_from_jira"]["gitlab_project_path"])
 
             # Search jira issues
             jira_issues = jira.search_issues(issues_yaml_dict["import_issues_from_jira"]["search_issues"], maxResults=None)
@@ -134,7 +251,12 @@ if __name__ == "__main__":
             # Iterate issues in jira
             for jira_issue in jira_issues:
 
-                logger.info("Importing Jira issue: {jira_issue_key}".format(jira_issue_key=jira_issue.key))
+                # Skip bad issues by list
+                if "skip_issues" in issues_yaml_dict["import_issues_from_jira"] and jira_issue.key in issues_yaml_dict["import_issues_from_jira"]["skip_issues"]:
+                    logger.info("Skipping Jira issue: {jira_issue_key}".format(jira_issue_key=jira_issue.key))
+                    continue
+                else:
+                    logger.info("Importing Jira issue: {jira_issue_key}".format(jira_issue_key=jira_issue.key))
 
                 # Prepare data for gitlab issue
                 gitlab_issue_data = {}
@@ -189,7 +311,14 @@ if __name__ == "__main__":
 
                 # Epic
                 if hasattr(jira_issue.fields, "parent"):
-                    gitlab_issue_data["epic_id"] = issues_yaml_dict["import_issues_from_jira"]["parent_to_epic_map"][jira_issue.fields.parent.key]
+                    group_name = issues_yaml_dict["import_issues_from_jira"]["gitlab_group_path"].split("/")[-1]
+                    for group in gl.groups.list(search=group_name):
+                        if group.full_path == issues_yaml_dict["import_issues_from_jira"]["gitlab_group_path"]:
+                            gitlab_group = group
+                    logger.info("Found group ID: {id}, name: {group}".format(group=gitlab_group.full_name, id=gitlab_group.id))
+                    epic = gitlab_group.epics.get(issues_yaml_dict["import_issues_from_jira"]["parent_to_epic_map"][jira_issue.fields.parent.key])
+                    logger.info("Found epic ID: {id}, name: {epic}".format(epic=epic.title, id=epic.id))
+                    gitlab_issue_data["epic_id"] = epic.id
 
                 # Description
                 if jira_issue.fields.description is not None:
@@ -212,6 +341,9 @@ if __name__ == "__main__":
                 # Status to Label
                 if "status_to_label_map" in issues_yaml_dict["import_issues_from_jira"] and jira_issue.fields.status.name in issues_yaml_dict["import_issues_from_jira"]["status_to_label_map"]:
                     gitlab_issue_data["labels"] += "," + issues_yaml_dict["import_issues_from_jira"]["status_to_label_map"][jira_issue.fields.status.name]
+                else:
+                    if jira_issue.fields.status.name != "Done":
+                        logger.info("Status {status} not found in status_to_label_map".format(status=jira_issue.fields.status.name))
                     
                 # Create issue in gitlab
                 gitlab_issue = gitlab_project.issues.create(gitlab_issue_data)
@@ -230,7 +362,6 @@ if __name__ == "__main__":
                 # State
                 if jira_issue.fields.status.name == "Done":
                     gitlab_issue.state_event = "close"
-
 
                 # Updated at
                 gitlab_issue.updated_at = jira_issue.fields.updated
