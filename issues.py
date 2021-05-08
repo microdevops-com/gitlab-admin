@@ -76,6 +76,7 @@ if __name__ == "__main__":
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--import-issues-from-jira", dest="import_issues_from_jira", help="import issues from jira with rules defined in yaml", action="store_true")
     group.add_argument("--import-epics-from-jira", dest="import_epics_from_jira", help="import issues as epics from jira with rules defined in yaml", action="store_true")
+    group.add_argument("--import-milestones-from-jira", dest="import_milestones_from_jira", help="import issues as milestones from jira with rules defined in yaml", action="store_true")
     args = parser.parse_args()
 
     # Set logger and console debug
@@ -203,7 +204,7 @@ if __name__ == "__main__":
                     if jira_issue.fields.status.name != "Done":
                         logger.info("Status {status} not found in status_to_label_map".format(status=jira_issue.fields.status.name))
                     
-                # Create issue in gitlab
+                # Create Epic in GitLab
                 gitlab_epic = gitlab_group.epics.create(gitlab_epic_data)
                 logger.info("GitLab Epic created: {web_url}".format(web_url=gitlab_epic.web_url))
 
@@ -228,6 +229,90 @@ if __name__ == "__main__":
                 # Dump attr change otherwise save may produce errors
                 gitlab_epic.title = jira_issue.fields.summary
                 gitlab_epic.save()
+
+        if args.import_milestones_from_jira:
+            
+            # Connect to GitLab
+            gl = gitlab.Gitlab(issues_yaml_dict["gitlab"]["url"], private_token=GL_ADMIN_PRIVATE_TOKEN)
+            gl.auth()
+
+            # Connect to Jira
+            jira = jira.JIRA(issues_yaml_dict["import_milestones_from_jira"]["jira"]["url"], basic_auth=(issues_yaml_dict["import_milestones_from_jira"]["jira"]["user"], JIRA_PRIVATE_TOKEN))
+
+            # Jira custom fields map
+            jira_fields = jira.fields()
+            jira_fields_name_map = {jira.field["name"]:jira.field["id"] for jira.field in jira_fields}
+
+            # Get gitlab project
+            gitlab_project = gl.projects.get(issues_yaml_dict["import_issues_from_jira"]["gitlab_project_path"])
+
+            # Search jira issues
+            jira_issues = jira.search_issues(issues_yaml_dict["import_milestones_from_jira"]["search_issues"], maxResults=None)
+
+            # Iterate issues in jira
+            for jira_issue in jira_issues:
+
+                logger.info("Importing Jira issue: {jira_issue_key}".format(jira_issue_key=jira_issue.key))
+
+                # Prepare data for gitlab milestone
+                gitlab_milestone_data = {}
+
+                # Title
+                gitlab_milestone_data["title"] = jira_issue.fields.summary
+
+                # Created at
+                gitlab_milestone_data["created_at"] = jira_issue.fields.created
+
+                # Jira original issue
+                gitlab_milestone_data["description"] = "Jira Link: {jira_url}/browse/{key}\n\n".format(jira_url=issues_yaml_dict["import_milestones_from_jira"]["jira"]["url"], key=jira_issue.key)
+
+                # Jira Reporter
+                gitlab_milestone_data["description"] += "Jira Reporter: {reporter}\n\n".format(reporter=jira_issue.fields.reporter.displayName)
+
+                # Jira attachment links
+                expanded_att_jira_issue = jira.issue(jira_issue.key, expand="attachment")
+                if len(expanded_att_jira_issue.fields.attachment):
+                    gitlab_milestone_data["description"] += "Jira Attachments:\n"
+                    for att in expanded_att_jira_issue.fields.attachment:
+                        gitlab_milestone_data["description"] += "- {content}\n".format(content=att.content)
+                    gitlab_milestone_data["description"] += "\n"
+
+                # Due Date
+                gitlab_milestone_data["due_date"] = jira_issue.fields.duedate
+
+                # Description
+                if jira_issue.fields.description is not None:
+                    gitlab_milestone_data["description"] += jira_to_md(jira_issue.fields.description)
+                    gitlab_milestone_data["description"] += "\n"
+
+                # Checklist
+                if getattr(jira_issue.fields, jira_fields_name_map["Checklist Text"]) is not None:
+                    for checklist_item in getattr(jira_issue.fields, jira_fields_name_map["Checklist Text"]).splitlines():
+
+                        # Check first 5 symbols in item - check mark
+                        if checklist_item[0:5] == "* [x]":
+                            gitlab_milestone_data["description"] += "- [x] "
+                            gitlab_milestone_data["description"] += jira_to_md(checklist_item[6:])
+                        else:
+                            gitlab_milestone_data["description"] += "- [ ] "
+                            gitlab_milestone_data["description"] += jira_to_md(checklist_item[2:])
+                        gitlab_milestone_data["description"] += "\n"
+                
+                # Create Milestone in GitLab
+                gitlab_milestone = gitlab_project.milestones.create(gitlab_milestone_data)
+                logger.info("GitLab Milestone created: {web_url}".format(web_url=gitlab_milestone.web_url))
+
+                # State
+                if jira_issue.fields.status.name == "Done":
+                    gitlab_milestone.state_event = "close"
+
+                # Updated at
+                gitlab_milestone.updated_at = jira_issue.fields.updated
+
+                # Save
+                # Dump attr change otherwise save may produce errors
+                gitlab_milestone.title = jira_issue.fields.summary
+                gitlab_milestone.save()
 
         if args.import_issues_from_jira:
             
@@ -289,6 +374,8 @@ if __name__ == "__main__":
                             display_name_to_search = issues_yaml_dict["import_issues_from_jira"]["name_map"][jira_issue.fields.assignee.displayName]
                         else:
                             display_name_to_search = jira_issue.fields.assignee.displayName
+                    else:
+                        display_name_to_search = jira_issue.fields.assignee.displayName
                     # Get list by name search
                     gl_assignee_user_list = gl.users.list(search=display_name_to_search)
                     # Search by Name - the only always existing field and make sure exact search
@@ -311,14 +398,25 @@ if __name__ == "__main__":
 
                 # Epic
                 if hasattr(jira_issue.fields, "parent"):
-                    group_name = issues_yaml_dict["import_issues_from_jira"]["gitlab_group_path"].split("/")[-1]
-                    for group in gl.groups.list(search=group_name):
-                        if group.full_path == issues_yaml_dict["import_issues_from_jira"]["gitlab_group_path"]:
-                            gitlab_group = group
-                    logger.info("Found group ID: {id}, name: {group}".format(group=gitlab_group.full_name, id=gitlab_group.id))
-                    epic = gitlab_group.epics.get(issues_yaml_dict["import_issues_from_jira"]["parent_to_epic_map"][jira_issue.fields.parent.key])
-                    logger.info("Found epic ID: {id}, name: {epic}".format(epic=epic.title, id=epic.id))
-                    gitlab_issue_data["epic_id"] = epic.id
+                    if jira_issue.fields.parent.key in issues_yaml_dict["import_issues_from_jira"]["parent_to_epic_map"]:
+                        group_name = issues_yaml_dict["import_issues_from_jira"]["gitlab_group_path"].split("/")[-1]
+                        for group in gl.groups.list(search=group_name):
+                            if group.full_path == issues_yaml_dict["import_issues_from_jira"]["gitlab_group_path"]:
+                                gitlab_group = group
+                        logger.info("Found group ID: {id}, name: {group}".format(group=gitlab_group.full_name, id=gitlab_group.id))
+                        epic = gitlab_group.epics.get(issues_yaml_dict["import_issues_from_jira"]["parent_to_epic_map"][jira_issue.fields.parent.key])
+                        logger.info("Found epic ID: {id}, name: {epic}".format(epic=epic.title, id=epic.id))
+                        gitlab_issue_data["epic_id"] = epic.id
+                    elif jira_issue.fields.parent.key in issues_yaml_dict["import_issues_from_jira"]["parent_to_milestone_map"]:
+                        milestone = None
+                        for ms in gitlab_project.milestones.list():
+                            if ms.iid == issues_yaml_dict["import_issues_from_jira"]["parent_to_milestone_map"][jira_issue.fields.parent.key]:
+                                ms_id = ms.id
+                        milestone = gitlab_project.milestones.get(ms_id)
+                        logger.info("Found milestone ID: {id}, name: {milestone}".format(milestone=milestone.title, id=milestone.id))
+                        gitlab_issue_data["milestone_id"] = milestone.id
+                    else:
+                        raise Exception("Issue parent is not defined neither in parent_to_epic_map nor in parent_to_milestone_map")
 
                 # Description
                 if jira_issue.fields.description is not None:
@@ -345,7 +443,7 @@ if __name__ == "__main__":
                     if jira_issue.fields.status.name != "Done":
                         logger.info("Status {status} not found in status_to_label_map".format(status=jira_issue.fields.status.name))
                     
-                # Create issue in gitlab
+                # Create Issue in GitLab
                 gitlab_issue = gitlab_project.issues.create(gitlab_issue_data)
                 logger.info("GitLab Issue created: {web_url}".format(web_url=gitlab_issue.web_url))
 
