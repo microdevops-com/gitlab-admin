@@ -299,19 +299,17 @@ if __name__ == "__main__":
                         
                         # Skip outdated deployment jobs
                         if "skip_outdated_deployment_jobs" in project_dict:
-                            # This lacks api support, do db hack
-                            # https://gitlab.com/gitlab-org/gitlab/-/issues/212621
-                            cur = conn.cursor()
-                            sql = "UPDATE project_ci_cd_settings SET forward_deployment_enabled={f_d_e} WHERE project_id = {id}".format(f_d_e="true" if project_dict["skip_outdated_deployment_jobs"] else "false", id=project.id)
-                            try:
-                                cur.execute(sql)
-                                logger.info("Query execution status:")
-                                logger.info(cur.statusmessage)
-                                conn.commit()
-                            except Exception as e:
-                                raise Exception("Caught exception on query execution")
-                            cur.close()
-                            logger.info("Project skip_outdated_deployment_jobs set via db to {f_d_e}".format(f_d_e=project_dict["skip_outdated_deployment_jobs"]))
+                            project_id = project.id
+                            data = {
+                                'ci_forward_deployment_enabled': project_dict["skip_outdated_deployment_jobs"]
+                            }
+                            response = requests.put(
+                                f'{projects_yaml_dict["gitlab"]["url"]}/api/v4/projects/{project_id}',
+                                headers={'PRIVATE-TOKEN': GL_ADMIN_PRIVATE_TOKEN},
+                                json=data
+                            )
+
+                            logger.info(f'Project skip_outdated_deployment_jobs set via db to {project_dict["skip_outdated_deployment_jobs"]}')
                         
                         # Squash settings
                         if "squash_commits_when_merging" in project_dict:
