@@ -12,6 +12,7 @@ import json
 import re
 import psycopg2
 import datetime
+import requests
 
 # Constants and envs
 
@@ -36,6 +37,7 @@ if __name__ == "__main__":
     parser.add_argument("--git-push", dest="git_push", help="push after commit", action="store_true")
     parser.add_argument("--dry-run-gitlab", dest="dry_run_gitlab", help="no new objects created in gitlab", action="store_true")
     parser.add_argument("--yaml", dest="yaml", help="use file FILE instead of default projects.yaml", nargs=1, metavar=("FILE"))
+    parser.add_argument("--ignore-db", dest="ignore_db", help="ignore connect to db if do not use specific options", action="store_true")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--setup-projects", dest="setup_projects", help="ensure projects created in GitLab, their settings setup", action="store_true")
     group.add_argument("--template-projects", dest="template_projects", help="update projects git repos from template using current user git creds", action="store_true")
@@ -49,24 +51,26 @@ if __name__ == "__main__":
         logger = set_logger(logging.ERROR, LOG_DIR, LOG_FILE)
 
     GL_ADMIN_PRIVATE_TOKEN = os.environ.get("GL_ADMIN_PRIVATE_TOKEN")
-    if GL_ADMIN_PRIVATE_TOKEN is None:
-        raise Exception("Env var GL_ADMIN_PRIVATE_TOKEN missing")
 
-    PG_DB_HOST = os.environ.get("PG_DB_HOST")
-    if PG_DB_HOST is None:
-        raise Exception("Env var PG_DB_HOST missing")
+    if not args.ignore_db:
+        if GL_ADMIN_PRIVATE_TOKEN is None:
+            raise Exception("Env var GL_ADMIN_PRIVATE_TOKEN missing")
 
-    PG_DB_NAME = os.environ.get("PG_DB_NAME")
-    if PG_DB_NAME is None:
-        raise Exception("Env var PG_DB_NAME missing")
+        PG_DB_HOST = os.environ.get("PG_DB_HOST")
+        if PG_DB_HOST is None:
+            raise Exception("Env var PG_DB_HOST missing")
 
-    PG_DB_USER = os.environ.get("PG_DB_USER")
-    if PG_DB_USER is None:
-        raise Exception("Env var PG_DB_USER missing")
+        PG_DB_NAME = os.environ.get("PG_DB_NAME")
+        if PG_DB_NAME is None:
+            raise Exception("Env var PG_DB_NAME missing")
 
-    PG_DB_PASS = os.environ.get("PG_DB_PASS")
-    if PG_DB_PASS is None:
-        raise Exception("Env var PG_DB_PASS missing")
+        PG_DB_USER = os.environ.get("PG_DB_USER")
+        if PG_DB_USER is None:
+            raise Exception("Env var PG_DB_USER missing")
+
+        PG_DB_PASS = os.environ.get("PG_DB_PASS")
+        if PG_DB_PASS is None:
+            raise Exception("Env var PG_DB_PASS missing")
 
     # Catch exception to logger
 
@@ -88,8 +92,9 @@ if __name__ == "__main__":
                 raise Exception("Config file error or missing: {0}/{1}".format(WORK_DIR, PROJECTS_YAML))
         
         # Connect to PG
-        dsn = "host={} dbname={} user={} password={}".format(PG_DB_HOST, PG_DB_NAME, PG_DB_USER, PG_DB_PASS)
-        conn = psycopg2.connect(dsn)
+        if not args.ignore_db:
+            dsn = "host={} dbname={} user={} password={}".format(PG_DB_HOST, PG_DB_NAME, PG_DB_USER, PG_DB_PASS)
+            conn = psycopg2.connect(dsn)
 
         # Do tasks
 
@@ -735,7 +740,8 @@ if __name__ == "__main__":
                                         logger.exception(e)
 
         # Close connection
-        conn.close()
+        if not args.ignore_db:
+            conn.close()
 
     # Reroute catched exception to log
     except Exception as e:
