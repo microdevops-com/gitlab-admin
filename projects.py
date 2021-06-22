@@ -314,7 +314,7 @@ if __name__ == "__main__":
                                 json=data
                             )
 
-                            logger.info(f'Project skip_outdated_deployment_jobs set via db to {project_dict["skip_outdated_deployment_jobs"]}')
+                            logger.info(f'Project skip_outdated_deployment_jobs set via api to {project_dict["skip_outdated_deployment_jobs"]}')
                         
                         # Squash settings
                         if "squash_commits_when_merging" in project_dict:
