@@ -1,5 +1,8 @@
 # gitlab-admin
 
+## IMPORTANT!
+### Gitlab version 13.12 or higher
+
 ## Setup
 Env var `GL_ADMIN_PRIVATE_TOKEN` needed to access GitLab as Admin to create and setup projects.
 Env vars `PG_DB_HOST`, `PG_DB_NAME`, `PG_DB_USER`, `PG_DB_PASS` for access to GitLab PostgreSQL DB are required to set these options (API lacks support):
