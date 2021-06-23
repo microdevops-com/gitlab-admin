@@ -12,6 +12,7 @@ import json
 import re
 import psycopg2
 import datetime
+import requests
 
 # Constants and envs
 
@@ -36,6 +37,7 @@ if __name__ == "__main__":
     parser.add_argument("--git-push", dest="git_push", help="push after commit", action="store_true")
     parser.add_argument("--dry-run-gitlab", dest="dry_run_gitlab", help="no new objects created in gitlab", action="store_true")
     parser.add_argument("--yaml", dest="yaml", help="use file FILE instead of default projects.yaml", nargs=1, metavar=("FILE"))
+    parser.add_argument("--ignore-db", dest="ignore_db", help="ignore connect to db if do not use specific options", action="store_true")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--setup-projects", dest="setup_projects", help="ensure projects created in GitLab, their settings setup", action="store_true")
     group.add_argument("--template-projects", dest="template_projects", help="update projects git repos from template using current user git creds", action="store_true")
@@ -49,24 +51,26 @@ if __name__ == "__main__":
         logger = set_logger(logging.ERROR, LOG_DIR, LOG_FILE)
 
     GL_ADMIN_PRIVATE_TOKEN = os.environ.get("GL_ADMIN_PRIVATE_TOKEN")
-    if GL_ADMIN_PRIVATE_TOKEN is None:
-        raise Exception("Env var GL_ADMIN_PRIVATE_TOKEN missing")
 
-    PG_DB_HOST = os.environ.get("PG_DB_HOST")
-    if PG_DB_HOST is None:
-        raise Exception("Env var PG_DB_HOST missing")
+    if not args.ignore_db:
+        if GL_ADMIN_PRIVATE_TOKEN is None:
+            raise Exception("Env var GL_ADMIN_PRIVATE_TOKEN missing")
 
-    PG_DB_NAME = os.environ.get("PG_DB_NAME")
-    if PG_DB_NAME is None:
-        raise Exception("Env var PG_DB_NAME missing")
+        PG_DB_HOST = os.environ.get("PG_DB_HOST")
+        if PG_DB_HOST is None:
+            raise Exception("Env var PG_DB_HOST missing")
 
-    PG_DB_USER = os.environ.get("PG_DB_USER")
-    if PG_DB_USER is None:
-        raise Exception("Env var PG_DB_USER missing")
+        PG_DB_NAME = os.environ.get("PG_DB_NAME")
+        if PG_DB_NAME is None:
+            raise Exception("Env var PG_DB_NAME missing")
 
-    PG_DB_PASS = os.environ.get("PG_DB_PASS")
-    if PG_DB_PASS is None:
-        raise Exception("Env var PG_DB_PASS missing")
+        PG_DB_USER = os.environ.get("PG_DB_USER")
+        if PG_DB_USER is None:
+            raise Exception("Env var PG_DB_USER missing")
+
+        PG_DB_PASS = os.environ.get("PG_DB_PASS")
+        if PG_DB_PASS is None:
+            raise Exception("Env var PG_DB_PASS missing")
 
     # Catch exception to logger
 
@@ -88,8 +92,9 @@ if __name__ == "__main__":
                 raise Exception("Config file error or missing: {0}/{1}".format(WORK_DIR, PROJECTS_YAML))
         
         # Connect to PG
-        dsn = "host={} dbname={} user={} password={}".format(PG_DB_HOST, PG_DB_NAME, PG_DB_USER, PG_DB_PASS)
-        conn = psycopg2.connect(dsn)
+        if not args.ignore_db:
+            dsn = "host={} dbname={} user={} password={}".format(PG_DB_HOST, PG_DB_NAME, PG_DB_USER, PG_DB_PASS)
+            conn = psycopg2.connect(dsn)
 
         # Do tasks
 
@@ -236,40 +241,41 @@ if __name__ == "__main__":
                         # Deploy tokens
                         if "deploy_tokens" in project_dict:
                             for deploy_token in project_dict["deploy_tokens"]:
-
-                                # Check if token needs to be created
+                                project_id = project.id
                                 token_needs_to_be_created = True
-                                for token in project.deploytokens.list(all=True):
 
-                                    # Token revocation status could be only fetched from db, check and ignore revoked tokens
-                                    cur = conn.cursor()
-                                    sql = "SELECT revoked FROM deploy_tokens WHERE id = {id}".format(id=token.id)
-                                    try:
-                                        cur.execute(sql)
-                                        logger.info("Query execution status:")
-                                        logger.info(cur.statusmessage)
-                                        for row in cur:
-                                            token_revoked = row[0]
-                                    except Exception as e:
-                                        raise Exception("Caught exception on query execution")
-                                    cur.close()
-
-                                    # Skip if token is revoked
-                                    if token_revoked:
-                                        logger.info("Revoked token {token} skipped".format(token=token))
-                                        continue
-
-                                    # Set not needed if token with the same name found
-                                    if token.name == deploy_token["name"]:
-                                        token_needs_to_be_created = False
+                                # Get only active tokens
+                                response = requests.get(
+                                    f'{projects_yaml_dict["gitlab"]["url"]}/api/v4/projects/{project_id}/deploy_tokens?active=true',
+                                    headers={'PRIVATE-TOKEN': GL_ADMIN_PRIVATE_TOKEN}
+                                )
+                                response = response.json()
                                 
-                                # Finally create token if needed
-                                if token_needs_to_be_created:
-                                    token = project.deploytokens.create({'name': deploy_token["name"], 'scopes': deploy_token["scopes"]})
-                                    logger.info("Project {project} deploy token added:".format(project=project_dict["path"]))
-                                    logger.info(token)
-                                else:
+                                # check token if active token exist
+                                if response:
+                                    for token in response:
+                                        if token["name"] == deploy_token["name"]:
+                                            token_needs_to_be_created = False
+                                            break
+
+                                if not token_needs_to_be_created:
                                     logger.info("Project {project} deploy token {token_name} already exists".format(project=project_dict["path"], token_name=deploy_token["name"]))
+                                else:
+                                    # create a token if it does not exist or is new
+                                    data = {
+                                        "name": deploy_token["name"],
+                                        "scopes": deploy_token["scopes"]
+                                    }
+
+                                    response = requests.post(
+                                        f'{projects_yaml_dict["gitlab"]["url"]}/api/v4/projects/{project_id}/deploy_tokens/',
+                                        headers={'PRIVATE-TOKEN': GL_ADMIN_PRIVATE_TOKEN},
+                                        json=data
+                                    )
+
+                                    response = response.json()
+                                    logger.info("Project {project} deploy token added:".format(project=project_dict["path"]))
+                                    logger.info(f"\n-------------------------\nToken: {response['token']}\n-------------------------")
 
                         # MR approval rules
                         if "approvals_before_merge" in project_dict:
@@ -299,19 +305,17 @@ if __name__ == "__main__":
                         
                         # Skip outdated deployment jobs
                         if "skip_outdated_deployment_jobs" in project_dict:
-                            # This lacks api support, do db hack
-                            # https://gitlab.com/gitlab-org/gitlab/-/issues/212621
-                            cur = conn.cursor()
-                            sql = "UPDATE project_ci_cd_settings SET forward_deployment_enabled={f_d_e} WHERE project_id = {id}".format(f_d_e="true" if project_dict["skip_outdated_deployment_jobs"] else "false", id=project.id)
-                            try:
-                                cur.execute(sql)
-                                logger.info("Query execution status:")
-                                logger.info(cur.statusmessage)
-                                conn.commit()
-                            except Exception as e:
-                                raise Exception("Caught exception on query execution")
-                            cur.close()
-                            logger.info("Project skip_outdated_deployment_jobs set via db to {f_d_e}".format(f_d_e=project_dict["skip_outdated_deployment_jobs"]))
+                            project_id = project.id
+                            data = {
+                                'ci_forward_deployment_enabled': project_dict["skip_outdated_deployment_jobs"]
+                            }
+                            response = requests.put(
+                                f'{projects_yaml_dict["gitlab"]["url"]}/api/v4/projects/{project_id}',
+                                headers={'PRIVATE-TOKEN': GL_ADMIN_PRIVATE_TOKEN},
+                                json=data
+                            )
+
+                            logger.info(f'Project skip_outdated_deployment_jobs set via api to {project_dict["skip_outdated_deployment_jobs"]}')
                         
                         # Squash settings
                         if "squash_commits_when_merging" in project_dict:
@@ -737,7 +741,8 @@ if __name__ == "__main__":
                                         logger.exception(e)
 
         # Close connection
-        conn.close()
+        if not args.ignore_db:
+            conn.close()
 
     # Reroute catched exception to log
     except Exception as e:

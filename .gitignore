@@ -4,6 +4,8 @@ log
 .projects
 .template
 __pycache__
+env
+.env
 
 # swap
 [._]*.s[a-v][a-z]
