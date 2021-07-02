@@ -125,11 +125,8 @@ if __name__ == "__main__":
                         project_path = project_dict["path"].split("/")[-1]
                         # Search groups by last name before project and match full path
                         group_name = project_dict["path"].split("/")[-2]
-                        group_id = None
-                        for group in gl.groups.list(search=group_name):
-                            if group.full_path == group_full_path:
-                                group_id = group.id
-                                logger.info("Found group ID: {id}, name: {group}".format(group=group.full_name, id=group.id))
+                        group_id = gl.groups.get(group_full_path).id
+                        logger.info("Found group ID: {id}, name: {group}".format(group=group.full_name, id=group.id))
                         # Create project
                         if not args.dry_run_gitlab:
                             project = gl.projects.create({'name': project_dict["name"], 'namespace_id': group_id, 'path': project_path})
@@ -224,13 +221,7 @@ if __name__ == "__main__":
                                         gl_member = project.members.create({'user_id': user_id, 'access_level': member["access_level"]})
                                         gl_member.save()
                                 if "group" in member:
-                                    # Search groups by last name before project and match full path
-                                    group_name = member["group"].split("/")[-1]
-                                    group_id = None
-                                    for group in gl.groups.list(search=group_name):
-                                        if group.full_path == member["group"]:
-                                            group_id = group.id
-                                            logger.info("Found group ID: {id}, name: {group}".format(group=group.full_name, id=group.id))
+                                    group_id = gl.groups.get(member["group"]).id
                                     if not any(shared_group["group_id"] == group_id for shared_group in project.shared_with_groups):
                                         project.share(group_id, member["access_level"])
                         # Deploy keys
