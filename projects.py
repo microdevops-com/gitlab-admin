@@ -125,7 +125,8 @@ if __name__ == "__main__":
                         project_path = project_dict["path"].split("/")[-1]
                         # Search groups by last name before project and match full path
                         group_name = project_dict["path"].split("/")[-2]
-                        group_id = gl.groups.get(group_full_path).id
+                        group = gl.groups.get(group_full_path)
+                        group_id = group.id
                         logger.info("Found group ID: {id}, name: {group}".format(group=group.full_name, id=group.id))
                         # Create project
                         if not args.dry_run_gitlab:
