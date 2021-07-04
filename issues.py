@@ -409,6 +409,8 @@ if __name__ == "__main__":
                         milestone = gitlab_project.milestones.get(ms_id)
                         logger.info("Found milestone ID: {id}, name: {milestone}".format(milestone=milestone.title, id=milestone.id))
                         gitlab_issue_data["milestone_id"] = milestone.id
+                    elif jira_issue.fields.parent.key in issues_yaml_dict["import_issues_from_jira"]["parent_to_none_map"]:
+                        logger.info("Parent ignored")
                     else:
                         raise Exception("Issue parent is not defined neither in parent_to_epic_map nor in parent_to_milestone_map")
 

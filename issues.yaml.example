@@ -42,6 +42,8 @@ import_issues_from_jira:
     DEVOPS-302: 1
   parent_to_milestone_map: # Map Jira Parent to GitLab Milestone Id
     DEVOPS-304: 1
+  parent_to_none_map: # Skip adding Jira Parent (make standalone)
+    - DEVOPS-305
   status_to_label_map: # Map Jira Status to GitLab Label
     Backlog: Backlog
     To Do: To Do
