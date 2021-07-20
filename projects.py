@@ -366,11 +366,9 @@ if __name__ == "__main__":
 
                                 g_ids = []
                                 for gr in rule["groups"]:
-                                    group_name = gr.split("/")[-1]
-                                    for group in gl.groups.list(search=group_name):
-                                        if group.full_path == gr:
-                                            g_ids.append(group.id)
-                                            logger.info("Found group ID: {id}, name: {group}".format(group=group.full_name, id=group.id))
+                                    group = gl.groups.get(gr)
+                                    logger.info("Found group ID: {id}, name: {group}".format(group=group.full_name, id=group.id))
+                                    g_ids.append(group.id)
 
                                 project.approvalrules.create(
                                     {
