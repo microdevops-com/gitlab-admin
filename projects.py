@@ -38,6 +38,7 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run-gitlab", dest="dry_run_gitlab", help="no new objects created in gitlab", action="store_true")
     parser.add_argument("--yaml", dest="yaml", help="use file FILE instead of default projects.yaml", nargs=1, metavar=("FILE"))
     parser.add_argument("--ignore-db", dest="ignore_db", help="ignore connect to db if do not use specific options", action="store_true")
+    parser.add_argument("--variables-clean-all-before-set", dest="variables_clean_all_before_set", help="delete all variables before setting, useful to clean garbage", action="store_true")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--setup-projects", dest="setup_projects", help="ensure projects created in GitLab, their settings setup", action="store_true")
     group.add_argument("--template-projects", dest="template_projects", help="update projects git repos from template using current user git creds", action="store_true")
@@ -452,7 +453,7 @@ if __name__ == "__main__":
                                 else:
                                     project_dict_variables.append(var)
                             # Check variables_clean_all_before_set
-                            if "variables_clean_all_before_set" in project_dict and project_dict["variables_clean_all_before_set"]:
+                            if args.variables_clean_all_before_set or ("variables_clean_all_before_set" in project_dict and project_dict["variables_clean_all_before_set"]):
                                 for project_var in project.variables.list(all=True):
                                     # There is a bug (at least at python-gitlab 2.5.0):
                                     # gitlab.exceptions.GitlabDeleteError: 409: There are multiple variables with provided parameters. Please use 'filter[environment_scope]'
