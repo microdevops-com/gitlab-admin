@@ -1,4 +1,4 @@
-python-gitlab==2.10.0
+python-gitlab==3.5.*
 PyYAML==5.4.1
 psycopg2-binary==2.8.6
 jira==2.0.0
