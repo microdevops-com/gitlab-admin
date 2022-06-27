@@ -1,7 +1,20 @@
+# vi: set ft=yaml:
+
 gitlab:
   url: https://gitlab.example.com
   author_email: commiter@example.com
   author_name: Commit Author
+groups:
+  - path: dev/projects/subgroup # mandatory, parent group should exist
+    name: Subgroup # mandatory
+    active: True # mandatory
+    description: Subgroup # mandatory
+    visibility: private # mandatory
+    members: # optional, see projects:members for complete description
+      ...
+    variables_clean_all_before_set: False # optional, delete all variables before setting, useful to clean garbage
+    variables: # optional, see projects:variables for complete description
+      ...
 projects:
   - path: dev/projects/subgroup/project1 # mandatory
     name: Project1 # mandatory
