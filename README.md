@@ -14,6 +14,15 @@ Add this repo as Git Submodule to a project:
 git submodule add --name .gitlab-admin -b master -- https://github.com/sysadmws/gitlab-admin .gitlab-admin
 ```
 
+Add symlinks to submodule:
+```
+ln -s .gitlab-admin/requirements.txt
+ln -s .gitlab-admin/issues.py
+ln -s .gitlab-admin/projects.py
+ln -s .gitlab-admin/settings.py
+ln -s .gitlab-admin/sysadmws_common.py
+```
+
 Install python3 requirements:
 ```
 pip3 install -r requirements.txt
