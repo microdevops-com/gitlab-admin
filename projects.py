@@ -298,10 +298,10 @@ if __name__ == "__main__":
         logger = set_logger(logging.ERROR, LOG_DIR, LOG_FILE)
 
     GL_ADMIN_PRIVATE_TOKEN = os.environ.get("GL_ADMIN_PRIVATE_TOKEN")
+    if GL_ADMIN_PRIVATE_TOKEN is None:
+        raise Exception("Env var GL_ADMIN_PRIVATE_TOKEN missing")
 
-    if not args.ignore_db:
-        if GL_ADMIN_PRIVATE_TOKEN is None:
-            raise Exception("Env var GL_ADMIN_PRIVATE_TOKEN missing")
+    if not (args.ignore_db or args.apply_variables ):
 
         PG_DB_HOST = os.environ.get("PG_DB_HOST")
         if PG_DB_HOST is None:
