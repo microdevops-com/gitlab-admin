@@ -11,7 +11,7 @@ Env vars `PG_DB_HOST`, `PG_DB_NAME`, `PG_DB_USER`, `PG_DB_PASS` for access to Gi
 
 Add this repo as Git Submodule to a project:
 ```
-git submodule add --name .gitlab-admin -b master -- https://github.com/sysadmws/gitlab-admin .gitlab-admin
+git submodule add --name .gitlab-admin -b master -- https://github.com/microdevops-com/gitlab-admin .gitlab-admin
 ```
 
 Add symlinks to submodule:
