@@ -301,7 +301,7 @@ if __name__ == "__main__":
     if GL_ADMIN_PRIVATE_TOKEN is None:
         raise Exception("Env var GL_ADMIN_PRIVATE_TOKEN missing")
 
-    if not (args.ignore_db or args.apply_variables ):
+    if not (args.ignore_db or args.apply_variables):
 
         PG_DB_HOST = os.environ.get("PG_DB_HOST")
         if PG_DB_HOST is None:
@@ -339,7 +339,7 @@ if __name__ == "__main__":
                 raise Exception("Config file error or missing: {0}/{1}".format(WORK_DIR, PROJECTS_YAML))
         
         # Connect to PG
-        if not args.ignore_db:
+        if not (args.ignore_db or args.apply_variables):
             dsn = "host={} dbname={} user={} password={}".format(PG_DB_HOST, PG_DB_NAME, PG_DB_USER, PG_DB_PASS)
             conn = psycopg2.connect(dsn)
 
@@ -1032,7 +1032,7 @@ if __name__ == "__main__":
                                         logger.exception(e)
 
         # Close connection
-        if not args.ignore_db:
+        if not (args.ignore_db or args.apply_variables):
             conn.close()
 
     # Reroute catched exception to log
