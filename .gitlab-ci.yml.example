@@ -1,0 +1,35 @@
+stages:
+  - requirements
+  - execute
+
+variables:
+  GIT_SUBMODULE_STRATEGY: normal
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+python:
+  tags:
+    - python
+    - prd
+  stage: requirements
+  script:
+    - pip3 install -r requirements.txt
+
+vars:
+  tags:
+    - python
+    - prd
+  stage: execute
+  script:
+    - |
+      # Check files changed for current commit, usually master or main
+      # -m - include parents of merge
+      CHANGED_FILES=$(git diff-tree -m --no-commit-id --name-only -r $CI_COMMIT_SHA)
+      for F in ${CHANGED_FILES}; do
+        if [[ "${F}" == *.yaml ]]; then
+          echo Processing file: ${F}
+          ./projects.py --apply-variables --yaml ${F}
+        fi
+      done
