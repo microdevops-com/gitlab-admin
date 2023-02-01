@@ -20,7 +20,6 @@ ln -s .gitlab-admin/requirements.txt
 ln -s .gitlab-admin/issues.py
 ln -s .gitlab-admin/projects.py
 ln -s .gitlab-admin/settings.py
-ln -s .gitlab-admin/sysadmws_common.py
 ```
 
 Install python3 requirements:

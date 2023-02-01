@@ -5,7 +5,7 @@
 # https://jira.readthedocs.io/en/latest/jirashell.html
 
 # Import common code
-from sysadmws_common import *
+from common import *
 
 import gitlab
 import glob

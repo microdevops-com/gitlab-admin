@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # Import common code
-from sysadmws_common import *
+from common import *
 
 import gitlab
 import glob
@@ -29,15 +29,15 @@ class SubprocessRunError(Exception):
 
 # Functions
 
-# Function to apply vars for a group
-def apply_vars_group(yaml_dict, group, group_dict, variables_clean_all_before_set, logger):
+# Function to apply vars for a group or a project (gorp)
+def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_before_set, logger):
 
     # Expand quick key_values sets
-    group_dict_variables = []
-    for var in group_dict["variables"]:
+    gorp_dict_variables = []
+    for var in gorp_dict["variables"]:
         if "key_values" in var:
             for k, v in var["key_values"].items():
-                group_dict_variables.append(
+                gorp_dict_variables.append(
                     {
                         "variable_type": var["variable_type"],
                         "protected": var["protected"],
@@ -48,27 +48,78 @@ def apply_vars_group(yaml_dict, group, group_dict, variables_clean_all_before_se
                     }
                 )
         else:
-            group_dict_variables.append(var)
+            gorp_dict_variables.append(var)
+
+    # If variables_from_files is set, load variables from files
+    if "variables_from_files" in gorp_dict:
+
+        for var_file in gorp_dict["variables_from_files"]:
+
+            # Load variables from file
+            var_file_dict = load_yaml("{0}".format(var_file), logger)
+            if var_file_dict is None:
+                raise Exception("Config file error or missing: {0}".format(var_file))
+
+            # Expand quick key_values sets in variables from file
+            var_file_dict_expanded = []
+            for var in var_file_dict:
+                if "key_values" in var:
+                    for k, v in var["key_values"].items():
+                        var_file_dict_expanded.append(
+                            {
+                                "variable_type": var["variable_type"],
+                                "protected": var["protected"],
+                                "masked": var["masked"],
+                                "environment_scope": var["environment_scope"],
+                                "key": k,
+                                "value": v
+                            }
+                        )
+                else:
+                    var_file_dict_expanded.append(var)
+
+            # Add var_file_dict_expanded items to gorp_dict_variables only if the same item with key, environment_scope is not already in gorp_dict_variables
+            for var in var_file_dict_expanded:
+                if not any(v["key"] == var["key"] and v["environment_scope"] == var["environment_scope"] for v in gorp_dict_variables):
+                    gorp_dict_variables.append(var)
 
     # Check variables_clean_all_before_set
     if variables_clean_all_before_set:
-        for group_var in group.variables.list(all=True):
+        for gorp_var in gorp.variables.list(all=True):
             # There is a bug (at least at python-gitlab 2.5.0):
             # gitlab.exceptions.GitlabDeleteError: 409: There are multiple variables with provided parameters. Please use 'filter[environment_scope]'
             # So delete via direct curl API call
-            script = textwrap.dedent(
-                """
-                curl --request DELETE \
-                        --header "PRIVATE-TOKEN: {private_token}" \
-                        "{gitlab_url}/api/v4/groups/{path_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
-                """
-            ).format(
-                gitlab_url=yaml_dict["gitlab"]["url"],
-                private_token=GL_ADMIN_PRIVATE_TOKEN,
-                path_encoded=group_dict["path"].replace("/", "%2F"),
-                key=group_var.key,
-                environment_scope=group_var.environment_scope.replace("*", "%2A")
-            )
+
+            # Different API call for group and project
+            if gorp_kind == "group":
+                script = textwrap.dedent(
+                    """
+                    curl --request DELETE \
+                            --header "PRIVATE-TOKEN: {private_token}" \
+                            "{gitlab_url}/api/v4/groups/{path_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
+                    """
+                ).format(
+                    gitlab_url=yaml_dict["gitlab"]["url"],
+                    private_token=GL_ADMIN_PRIVATE_TOKEN,
+                    path_encoded=gorp_dict["path"].replace("/", "%2F"),
+                    key=gorp_var.key,
+                    environment_scope=gorp_var.environment_scope.replace("*", "%2A")
+                )
+            elif gorp_kind == "project":
+                script = textwrap.dedent(
+                    """
+                    curl --request DELETE \
+                            --header "PRIVATE-TOKEN: {private_token}" \
+                            "{gitlab_url}/api/v4/projects/{path_with_namespace_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
+                    """
+                ).format(
+                    gitlab_url=yaml_dict["gitlab"]["url"],
+                    private_token=GL_ADMIN_PRIVATE_TOKEN,
+                    path_with_namespace_encoded=gorp.path_with_namespace.replace("/", "%2F"),
+                    key=gorp_var.key,
+                    environment_scope=gorp_var.environment_scope.replace("*", "%2A")
+                )
+
             logger.info("Running bash script:")
             logger.info(script)
             process = subprocess.run(script, shell=True, universal_newlines=True, check=False, executable="/bin/bash", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -83,40 +134,58 @@ def apply_vars_group(yaml_dict, group, group_dict, variables_clean_all_before_se
                 logger.info(process.stdout)
                 logger.info("Check stderr:")
                 logger.info(process.stderr)
-            logger.info("Deleting var {scope} / {var} because of variables_clean_all_before_set".format(scope=group_var.environment_scope, var=group_var.key))
+            logger.info("Deleting var {scope} / {var} because of variables_clean_all_before_set".format(scope=gorp_var.environment_scope, var=gorp_var.key))
 
     else:
 
         # We cannot update vars as key for update is not scope safe, so we delete first if var state is not as needed
-        for var in group_dict_variables:
-            for group_var in group.variables.list(all=True):
-                if group_var.environment_scope == var["environment_scope"] and group_var.key == var["key"]:
+        for var in gorp_dict_variables:
+            for gorp_var in gorp.variables.list(all=True):
+                if gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"]:
                     if (
-                        group_var.value != str(var["value"])
+                        gorp_var.value != str(var["value"])
                         or
-                        group_var.variable_type != var["variable_type"] 
+                        gorp_var.variable_type != var["variable_type"] 
                         or
-                        group_var.protected != var["protected"]
+                        gorp_var.protected != var["protected"]
                         or
-                        group_var.masked != var["masked"]
+                        gorp_var.masked != var["masked"]
                     ):
-                        # group_var.delete()
+                        # gorp_var.delete()
                         # There is a bug (at least at python-gitlab 2.5.0):
                         # gitlab.exceptions.GitlabDeleteError: 409: There are multiple variables with provided parameters. Please use 'filter[environment_scope]'
                         # So delete via direct curl API call
-                        script = textwrap.dedent(
-                            """
-                            curl --request DELETE \
-                                    --header "PRIVATE-TOKEN: {private_token}" \
-                                    "{gitlab_url}/api/v4/groups/{path_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
-                            """
-                        ).format(
-                            gitlab_url=yaml_dict["gitlab"]["url"],
-                            private_token=GL_ADMIN_PRIVATE_TOKEN,
-                            path_encoded=group_dict["path"].replace("/", "%2F"),
-                            key=var["key"],
-                            environment_scope=var["environment_scope"].replace("*", "%2A")
-                        )
+
+                        # Different API call for group and project
+                        if gorp_kind == "group":
+                            script = textwrap.dedent(
+                                """
+                                curl --request DELETE \
+                                        --header "PRIVATE-TOKEN: {private_token}" \
+                                        "{gitlab_url}/api/v4/groups/{path_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
+                                """
+                            ).format(
+                                gitlab_url=yaml_dict["gitlab"]["url"],
+                                private_token=GL_ADMIN_PRIVATE_TOKEN,
+                                path_encoded=gorp_dict["path"].replace("/", "%2F"),
+                                key=var["key"],
+                                environment_scope=var["environment_scope"].replace("*", "%2A")
+                            )
+                        elif gorp_kind == "project":
+                            script = textwrap.dedent(
+                                """
+                                curl --request DELETE \
+                                        --header "PRIVATE-TOKEN: {private_token}" \
+                                        "{gitlab_url}/api/v4/projects/{path_with_namespace_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
+                                """
+                            ).format(
+                                gitlab_url=yaml_dict["gitlab"]["url"],
+                                private_token=GL_ADMIN_PRIVATE_TOKEN,
+                                path_with_namespace_encoded=gorp.path_with_namespace.replace("/", "%2F"),
+                                key=var["key"],
+                                environment_scope=var["environment_scope"].replace("*", "%2A")
+                            )
+
                         logger.info("Running bash script:")
                         logger.info(script)
                         process = subprocess.run(script, shell=True, universal_newlines=True, check=False, executable="/bin/bash", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -134,11 +203,11 @@ def apply_vars_group(yaml_dict, group, group_dict, variables_clean_all_before_se
                         logger.info("Var {scope} / {var} did not match yaml, deleted to be updated".format(scope=var["environment_scope"], var=var["key"]))
 
     # Then save
-    group.save()
+    gorp.save()
 
     # And add again, adding is scope safe
-    for var in group_dict_variables:
-        if not any(group_var.environment_scope == var["environment_scope"] and group_var.key == var["key"] for group_var in group.variables.list(all=True)):
+    for var in gorp_dict_variables:
+        if not any(gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"] for gorp_var in gorp.variables.list(all=True)):
             var_dict = {
                 "key": var["key"],
                 "value": var["value"],
@@ -147,130 +216,8 @@ def apply_vars_group(yaml_dict, group, group_dict, variables_clean_all_before_se
                 "masked": var["masked"],
                 "environment_scope": var["environment_scope"]
             }
-            group.variables.create(var_dict)
+            gorp.variables.create(var_dict)
             logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
-
-# Function to apply vars for a project
-def apply_vars_project(yaml_dict, project, project_dict, variables_clean_all_before_set, logger):
-
-    # Expand quick key_values sets
-    project_dict_variables = []
-    for var in project_dict["variables"]:
-        if "key_values" in var:
-            for k, v in var["key_values"].items():
-                project_dict_variables.append(
-                    {
-                        "variable_type": var["variable_type"],
-                        "protected": var["protected"],
-                        "masked": var["masked"],
-                        "environment_scope": var["environment_scope"],
-                        "key": k,
-                        "value": v
-                    }
-                )
-        else:
-            project_dict_variables.append(var)
-
-    # Check variables_clean_all_before_set
-    if variables_clean_all_before_set:
-        for project_var in project.variables.list(all=True):
-            # There is a bug (at least at python-gitlab 2.5.0):
-            # gitlab.exceptions.GitlabDeleteError: 409: There are multiple variables with provided parameters. Please use 'filter[environment_scope]'
-            # So delete via direct curl API call
-            script = textwrap.dedent(
-                """
-                curl --request DELETE \
-                        --header "PRIVATE-TOKEN: {private_token}" \
-                        "{gitlab_url}/api/v4/projects/{path_with_namespace_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
-                """
-            ).format(
-                gitlab_url=yaml_dict["gitlab"]["url"],
-                private_token=GL_ADMIN_PRIVATE_TOKEN,
-                path_with_namespace_encoded=project.path_with_namespace.replace("/", "%2F"),
-                key=project_var.key,
-                environment_scope=project_var.environment_scope.replace("*", "%2A")
-            )
-            logger.info("Running bash script:")
-            logger.info(script)
-            process = subprocess.run(script, shell=True, universal_newlines=True, check=False, executable="/bin/bash", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if process.returncode:
-                logger.error("Check stdout:")
-                logger.error(process.stdout)
-                logger.error("Check stderr:")
-                logger.error(process.stderr)
-                raise SubprocessRunError("Subprocess run failed")
-            else:
-                logger.info("Check stdout:")
-                logger.info(process.stdout)
-                logger.info("Check stderr:")
-                logger.info(process.stderr)
-            logger.info("Deleting var {scope} / {var} because of variables_clean_all_before_set".format(scope=project_var.environment_scope, var=project_var.key))
-
-    else:
-
-        # We cannot update vars as key for update is not scope safe, so we delete first if var state is not as needed
-        for var in project_dict_variables:
-            for project_var in project.variables.list(all=True):
-                if project_var.environment_scope == var["environment_scope"] and project_var.key == var["key"]:
-                    if (
-                        project_var.value != str(var["value"])
-                        or
-                        project_var.variable_type != var["variable_type"] 
-                        or
-                        project_var.protected != var["protected"]
-                        or
-                        project_var.masked != var["masked"]
-                    ):
-                        # project_var.delete()
-                        # There is a bug (at least at python-gitlab 2.5.0):
-                        # gitlab.exceptions.GitlabDeleteError: 409: There are multiple variables with provided parameters. Please use 'filter[environment_scope]'
-                        # So delete via direct curl API call
-                        script = textwrap.dedent(
-                            """
-                            curl --request DELETE \
-                                    --header "PRIVATE-TOKEN: {private_token}" \
-                                    "{gitlab_url}/api/v4/projects/{path_with_namespace_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
-                            """
-                        ).format(
-                            gitlab_url=yaml_dict["gitlab"]["url"],
-                            private_token=GL_ADMIN_PRIVATE_TOKEN,
-                            path_with_namespace_encoded=project.path_with_namespace.replace("/", "%2F"),
-                            key=var["key"],
-                            environment_scope=var["environment_scope"].replace("*", "%2A")
-                        )
-                        logger.info("Running bash script:")
-                        logger.info(script)
-                        process = subprocess.run(script, shell=True, universal_newlines=True, check=False, executable="/bin/bash", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                        if process.returncode:
-                            logger.error("Check stdout:")
-                            logger.error(process.stdout)
-                            logger.error("Check stderr:")
-                            logger.error(process.stderr)
-                            raise SubprocessRunError("Subprocess run failed")
-                        else:
-                            logger.info("Check stdout:")
-                            logger.info(process.stdout)
-                            logger.info("Check stderr:")
-                            logger.info(process.stderr)
-                        logger.info("Var {scope} / {var} did not match yaml, deleted to be updated".format(scope=var["environment_scope"], var=var["key"]))
-
-    # Then save
-    project.save()
-
-    # And add again, adding is scope safe
-    for var in project_dict_variables:
-        if not any(project_var.environment_scope == var["environment_scope"] and project_var.key == var["key"] for project_var in project.variables.list(all=True)):
-            var_dict = {
-                "key": var["key"],
-                "value": var["value"],
-                "variable_type": var["variable_type"],
-                "protected": var["protected"],
-                "masked": var["masked"],
-                "environment_scope": var["environment_scope"]
-            }
-            project.variables.create(var_dict)
-            logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
-
 # Main
 
 if __name__ == "__main__":
@@ -375,7 +322,7 @@ if __name__ == "__main__":
                                 variables_clean_all_before_set = True
 
                                 # Call function
-                                apply_vars_group(yaml_dict, group, group_dict, variables_clean_all_before_set, logger)
+                                apply_vars_gorp("group", yaml_dict, group, group_dict, variables_clean_all_before_set, logger)
 
                             # Save
                             group.save()
@@ -407,7 +354,7 @@ if __name__ == "__main__":
                                 variables_clean_all_before_set = True
 
                                 # Call function
-                                apply_vars_project(yaml_dict, project, project_dict, variables_clean_all_before_set, logger)
+                                apply_vars_gorp("project", yaml_dict, project, project_dict, variables_clean_all_before_set, logger)
 
                             # Save
                             project.save()
@@ -491,7 +438,7 @@ if __name__ == "__main__":
                                 variables_clean_all_before_set = False
 
                             # Call function
-                            apply_vars_group(yaml_dict, group, group_dict, variables_clean_all_before_set, logger)
+                            apply_vars_gorp("group", yaml_dict, group, group_dict, variables_clean_all_before_set, logger)
 
                         # Save
                         group.save()
@@ -846,7 +793,7 @@ if __name__ == "__main__":
                                 variables_clean_all_before_set = False
 
                             # Call function
-                            apply_vars_project(yaml_dict, project, project_dict, variables_clean_all_before_set, logger)
+                            apply_vars_gorp("project", yaml_dict, project, project_dict, variables_clean_all_before_set, logger)
 
                         # Push Rules
                         if "push_rules" in project_dict:

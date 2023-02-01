@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # Import common code
-from sysadmws_common import *
+from common import *
 
 import gitlab
 import glob
