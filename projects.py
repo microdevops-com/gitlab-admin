@@ -32,12 +32,12 @@ class SubprocessRunError(Exception):
 # Function to apply vars for a group or a project (gorp)
 def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_before_set, logger):
 
-    # Expand quick key_values sets
-    gorp_dict_variables = []
+    # Expand quick key_values sets, pre1 before expanding environment_scope
+    gorp_dict_variables_pre1 = []
     for var in gorp_dict["variables"]:
         if "key_values" in var:
             for k, v in var["key_values"].items():
-                gorp_dict_variables.append(
+                gorp_dict_variables_pre1.append(
                     {
                         "variable_type": var["variable_type"],
                         "protected": var["protected"],
@@ -45,6 +45,24 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         "environment_scope": var["environment_scope"],
                         "key": k,
                         "value": v
+                    }
+                )
+        else:
+            gorp_dict_variables_pre1.append(var)
+
+    # Expand environment_scope if it is a list
+    gorp_dict_variables = []
+    for var in gorp_dict_variables_pre1:
+        if isinstance(var["environment_scope"], list):
+            for env_scope in var["environment_scope"]:
+                gorp_dict_variables.append(
+                    {
+                        "variable_type": var["variable_type"],
+                        "protected": var["protected"],
+                        "masked": var["masked"],
+                        "environment_scope": env_scope,
+                        "key": var["key"],
+                        "value": var["value"]
                     }
                 )
         else:

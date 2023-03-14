@@ -151,7 +151,9 @@ projects:
         variable_type: env_var
         protected: True
         masked: False
-        environment_scope: 'prod' # mandatory
+        environment_scope: # you can use list of scopes here, it will be expanded to several vars in gitlab
+          - 'prod'
+          - 'staging'
       - variable_type: env_var # mandatory, env_var or file
         protected: True # mandatory
         masked: False # mandatory
