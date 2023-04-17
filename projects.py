@@ -13,6 +13,7 @@ import re
 import psycopg2
 import datetime
 import requests
+import concurrent.futures
 
 # Constants and envs
 
@@ -22,6 +23,7 @@ LOG_DIR = "./log"
 LOG_FILE = "projects.log"
 PROJECTS_YAML = "projects.yaml"
 PROJECTS_SUBDIR = ".projects"
+CONCURRENT_MAX_WORKERS = 10
 
 # Custom Exceptions
 class SubprocessRunError(Exception):
@@ -103,62 +105,61 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
 
     # Check variables_clean_all_before_set
     if variables_clean_all_before_set:
-        for gorp_var in gorp.variables.list(all=True):
-            # There is a bug (at least at python-gitlab 2.5.0):
+
+        # Use multithreading to speed up
+        with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_MAX_WORKERS) as executor:
+
+            # There is a bug (at least at python-gitlab 3.14+):
             # gitlab.exceptions.GitlabDeleteError: 409: There are multiple variables with provided parameters. Please use 'filter[environment_scope]'
-            # So delete via direct curl API call
+            # So delete via direct API call using requests
 
-            # Different API call for group and project
-            if gorp_kind == "group":
-                script = textwrap.dedent(
-                    """
-                    curl --request DELETE \
-                            --header "PRIVATE-TOKEN: {private_token}" \
-                            "{gitlab_url}/api/v4/groups/{path_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
-                    """
-                ).format(
-                    gitlab_url=yaml_dict["gitlab"]["url"],
-                    private_token=GL_ADMIN_PRIVATE_TOKEN,
-                    path_encoded=gorp_dict["path"].replace("/", "%2F"),
-                    key=gorp_var.key,
-                    environment_scope=gorp_var.environment_scope.replace("*", "%2A")
-                )
-            elif gorp_kind == "project":
-                script = textwrap.dedent(
-                    """
-                    curl --request DELETE \
-                            --header "PRIVATE-TOKEN: {private_token}" \
-                            "{gitlab_url}/api/v4/projects/{path_with_namespace_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}"
-                    """
-                ).format(
-                    gitlab_url=yaml_dict["gitlab"]["url"],
-                    private_token=GL_ADMIN_PRIVATE_TOKEN,
-                    path_with_namespace_encoded=gorp.path_with_namespace.replace("/", "%2F"),
-                    key=gorp_var.key,
-                    environment_scope=gorp_var.environment_scope.replace("*", "%2A")
-                )
+            # Create requests session to reuse request connection
+            with requests.Session() as session:
 
-            logger.info("Running bash script:")
-            logger.info(script)
-            process = subprocess.run(script, shell=True, universal_newlines=True, check=False, executable="/bin/bash", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if process.returncode:
-                logger.error("Check stdout:")
-                logger.error(process.stdout)
-                logger.error("Check stderr:")
-                logger.error(process.stderr)
-                raise SubprocessRunError("Subprocess run failed")
-            else:
-                logger.info("Check stdout:")
-                logger.info(process.stdout)
-                logger.info("Check stderr:")
-                logger.info(process.stderr)
-            logger.info("Deleting var {scope} / {var} because of variables_clean_all_before_set".format(scope=gorp_var.environment_scope, var=gorp_var.key))
+                session.headers.update({"PRIVATE-TOKEN": GL_ADMIN_PRIVATE_TOKEN})
+
+                for gorp_var in gorp.variables.list(get_all=True):
+
+                    # Different API call for group and project
+                    if gorp_kind == "group":
+                        executor.submit(
+                            session.delete, "{gitlab_url}/api/v4/groups/{path_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}".format(
+                                gitlab_url=yaml_dict["gitlab"]["url"],
+                                path_encoded=gorp_dict["path"].replace("/", "%2F"),
+                                key=gorp_var.key,
+                                environment_scope=gorp_var.environment_scope.replace("*", "%2A")
+                            )
+                        )
+                    elif gorp_kind == "project":
+                        executor.submit(
+                            session.delete, "{gitlab_url}/api/v4/projects/{path_with_namespace_encoded}/variables/{key}?filter%5Benvironment_scope%5D={environment_scope}".format(
+                                gitlab_url=yaml_dict["gitlab"]["url"],
+                                path_with_namespace_encoded=gorp.path_with_namespace.replace("/", "%2F"),
+                                key=gorp_var.key,
+                                environment_scope=gorp_var.environment_scope.replace("*", "%2A")
+                            )
+                        )
+
+                    logger.info("Deleted var {scope} / {var} because of variables_clean_all_before_set".format(scope=gorp_var.environment_scope, var=gorp_var.key))
+
+            # Just add all vars from scratch
+            for var in gorp_dict_variables:
+                var_dict = {
+                    "key": var["key"],
+                    "value": var["value"],
+                    "variable_type": var["variable_type"],
+                    "protected": var["protected"],
+                    "masked": var["masked"],
+                    "environment_scope": var["environment_scope"]
+                }
+                executor.submit(gorp.variables.create, var_dict)
+                logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
 
     else:
 
         # We cannot update vars as key for update is not scope safe, so we delete first if var state is not as needed
         for var in gorp_dict_variables:
-            for gorp_var in gorp.variables.list(all=True):
+            for gorp_var in gorp.variables.list(get_all=True):
                 if gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"]:
                     if (
                         gorp_var.value != str(var["value"])
@@ -220,22 +221,23 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                             logger.info(process.stderr)
                         logger.info("Var {scope} / {var} did not match yaml, deleted to be updated".format(scope=var["environment_scope"], var=var["key"]))
 
+        # Adding is scope safe, so add all missing vars
+        for var in gorp_dict_variables:
+            if not any(gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"] for gorp_var in gorp.variables.list(get_all=True)):
+                var_dict = {
+                    "key": var["key"],
+                    "value": var["value"],
+                    "variable_type": var["variable_type"],
+                    "protected": var["protected"],
+                    "masked": var["masked"],
+                    "environment_scope": var["environment_scope"]
+                }
+                gorp.variables.create(var_dict)
+                logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
+
     # Then save
     gorp.save()
 
-    # And add again, adding is scope safe
-    for var in gorp_dict_variables:
-        if not any(gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"] for gorp_var in gorp.variables.list(all=True)):
-            var_dict = {
-                "key": var["key"],
-                "value": var["value"],
-                "variable_type": var["variable_type"],
-                "protected": var["protected"],
-                "masked": var["masked"],
-                "environment_scope": var["environment_scope"]
-            }
-            gorp.variables.create(var_dict)
-            logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
 # Main
 
 if __name__ == "__main__":
@@ -704,7 +706,7 @@ if __name__ == "__main__":
                         # Protected branches
                         if "protected_branches" in project_dict:
                             for branch in project_dict["protected_branches"]:
-                                if any(project_branch.name == branch["name"] for project_branch in project.protectedbranches.list(all=True)):
+                                if any(project_branch.name == branch["name"] for project_branch in project.protectedbranches.list(get_all=True)):
                                     p_branch = project.protectedbranches.get(branch["name"])
                                     p_branch.delete()
                                 project.protectedbranches.create(
@@ -720,14 +722,14 @@ if __name__ == "__main__":
                         # Protected tags
                         if "protected_tags" in project_dict:
                             for tag in project_dict["protected_tags"]:
-                                if any(project_tag.name == tag["name"] for project_tag in project.protectedtags.list(all=True)):
+                                if any(project_tag.name == tag["name"] for project_tag in project.protectedtags.list(get_all=True)):
                                     p_tag = project.protectedtags.get(tag["name"])
                                     p_tag.delete()
                                 project.protectedtags.create({'name': tag["name"], 'create_access_level': tag["create_access_level"]})
                         # MR approval rules (should be done after branch protection reset)
                         if "merge_request_approval_rules" in project_dict:
                             # Empty list before setting
-                            for mrar in project.approvalrules.list(all=True):
+                            for mrar in project.approvalrules.list(get_all=True):
                                 if mrar.name == 'All Members':
                                     continue
                                 mrar.delete()
@@ -752,16 +754,16 @@ if __name__ == "__main__":
                         # Runners
                         if "specific_runners_enabled" in project_dict:
                             for runner_to_add in project_dict["specific_runners_enabled"]:
-                                for runner in gl.runners.list(all=True):
+                                for runner in gl.runners.list(get_all=True):
                                     if runner.description == runner_to_add:
-                                        if not any(added_runner.description == runner_to_add for added_runner in project.runners.list(all=True)):
+                                        if not any(added_runner.description == runner_to_add for added_runner in project.runners.list(get_all=True)):
                                             project.runners.create({'runner_id': runner.id})
 
                         # Protected envs
                         if "protected_environments" in project_dict:
                             for env in project_dict["protected_environments"]:
                                 # Create env first
-                                if not any(p_env.name == env["name"] for p_env in project.environments.list(all=True)):
+                                if not any(p_env.name == env["name"] for p_env in project.environments.list(get_all=True)):
                                     project.environments.create({'name': env["name"]})
                                 # Protect with curl (python not yet supported)
                                 data = {
@@ -853,15 +855,15 @@ if __name__ == "__main__":
                     logger.info("Project {project} settings:".format(project=project_dict["path"]))
                     logger.info(project)
                     logger.info("Project {project} deploy keys:".format(project=project_dict["path"]))
-                    logger.info(project.keys.list(all=True))
+                    logger.info(project.keys.list(get_all=True))
                     logger.info("Project {project} deploy tokens:".format(project=project_dict["path"]))
-                    logger.info(project.deploytokens.list(all=True))
+                    logger.info(project.deploytokens.list(get_all=True))
                     logger.info("Project {project} protected branches:".format(project=project_dict["path"]))
-                    logger.info(project.protectedbranches.list(all=True))
+                    logger.info(project.protectedbranches.list(get_all=True))
                     logger.info("Project {project} protected tags:".format(project=project_dict["path"]))
-                    logger.info(project.protectedtags.list(all=True))
+                    logger.info(project.protectedtags.list(get_all=True))
                     logger.info("Project {project} runners:".format(project=project_dict["path"]))
-                    logger.info(project.runners.list(all=True))
+                    logger.info(project.runners.list(get_all=True))
                     # These are not available when jobs disabled
                     if not (
                         ("jobs_enabled" in project_dict and not project_dict["jobs_enabled"])
@@ -871,10 +873,10 @@ if __name__ == "__main__":
                         ("repository_access_level" in project_dict and project_dict["repository_access_level"] == "disabled")
                     ):
                         logger.info("Project {project} environments:".format(project=project_dict["path"]))
-                        logger.info(project.environments.list(all=True))
+                        logger.info(project.environments.list(get_all=True))
                         logger.info("Project {project} variables:".format(project=project_dict["path"]))
-                        logger.info(project.variables.list(all=True))
-                        for project_var in project.variables.list(all=True):
+                        logger.info(project.variables.list(get_all=True))
+                        for project_var in project.variables.list(get_all=True):
                             logger.info(project_var)
             
         if args.template_projects:
@@ -975,7 +977,7 @@ if __name__ == "__main__":
                                 continue
 
                             # Loop over repos (subpaths) inside project
-                            for repo in project.repositories.list(all=True):
+                            for repo in project.repositories.list(get_all=True):
 
                                 # Check image_repo_regex
                                 if re.search(rule["image_repo_regex"], repo.path):

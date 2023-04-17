@@ -12,7 +12,9 @@ groups:
     visibility: private # mandatory
     members: # optional, see projects:members for complete description
       ...
-    variables_clean_all_before_set: False # optional, delete all variables before setting, useful to clean garbage
+    variables_clean_all_before_set: True # optional, delete all variables before setting, useful to clean garbage, also it runs much faster than updating, disable only if you need to keep some manually added values
+    #variables_from_files: # optional, use with variables (or add variables: [] if only variables_from_files needed), file should contain a list of variables (without "variables:" key)
+    #  - var_file.inc # variables defined here below in "variables:" have higher priority than defined in files
     variables: # optional, see projects:variables for complete description
       ...
 projects:
@@ -124,7 +126,7 @@ projects:
       author_email_regex: ""
       file_name_regex: ""
       max_file_size: 0
-    variables_clean_all_before_set: False # optional, delete all variables before setting, useful to clean garbage
+    variables_clean_all_before_set: True # optional, delete all variables before setting, useful to clean garbage, also it runs much faster than updating, disable only if you need to keep some manually added values
     #variables_from_files: # optional, use with variables (or add variables: [] if only variables_from_files needed), file should contain a list of variables (without "variables:" key)
     #  - var_file.inc # variables defined here below in "variables:" have higher priority than defined in files
     variables: # optional
