@@ -44,6 +44,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         "variable_type": var["variable_type"],
                         "protected": var["protected"],
                         "masked": var["masked"],
+                        "raw": var["raw"] if "raw" in var else False,
                         "environment_scope": var["environment_scope"],
                         "key": k,
                         "value": v
@@ -62,6 +63,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         "variable_type": var["variable_type"],
                         "protected": var["protected"],
                         "masked": var["masked"],
+                        "raw": var["raw"] if "raw" in var else False,
                         "environment_scope": env_scope,
                         "key": var["key"],
                         "value": var["value"]
@@ -90,6 +92,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                                 "variable_type": var["variable_type"],
                                 "protected": var["protected"],
                                 "masked": var["masked"],
+                                "raw": var["raw"] if "raw" in var else False,
                                 "environment_scope": var["environment_scope"],
                                 "key": k,
                                 "value": v
@@ -150,6 +153,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                     "variable_type": var["variable_type"],
                     "protected": var["protected"],
                     "masked": var["masked"],
+                    "raw": var["raw"] if "raw" in var else False,
                     "environment_scope": var["environment_scope"]
                 }
                 executor.submit(gorp.variables.create, var_dict)
@@ -169,6 +173,8 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         gorp_var.protected != var["protected"]
                         or
                         gorp_var.masked != var["masked"]
+                        or
+                        gorp_var.raw != var["raw"] if "raw" in var else False
                     ):
                         # gorp_var.delete()
                         # There is a bug (at least at python-gitlab 2.5.0):
@@ -230,6 +236,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                     "variable_type": var["variable_type"],
                     "protected": var["protected"],
                     "masked": var["masked"],
+                    "raw": var["raw"] if "raw" in var else False,
                     "environment_scope": var["environment_scope"]
                 }
                 gorp.variables.create(var_dict)

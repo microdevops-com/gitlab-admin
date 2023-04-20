@@ -135,30 +135,35 @@ projects:
         variable_type: env_var # mandatory, env_var or file
         protected: True # mandatory
         masked: False # mandatory
+        #raw: True # optional, False by default, "Expand variable reference" switcher, in API reference it is called "raw" https://docs.gitlab.com/ee/api/project_level_variables.html
         environment_scope: '*' # mandatory
       - key: TEST1 # mandatory, we can have the same var in different scopes
         value: XXX1 # mandatory
         variable_type: env_var # mandatory, env_var or file
         protected: True # mandatory
         masked: False # mandatory
+        #raw: True # optional, False by default, "Expand variable reference" switcher, in API reference it is called "raw" https://docs.gitlab.com/ee/api/project_level_variables.html
         environment_scope: 'staging' # mandatory
       - key: TEST_TRUE
         value: "true" # do not put yaml boolean in value as GitLab vars are not boolean compatible, it will save them as "true" and "false" strings, put the same here
         variable_type: env_var
         protected: True
         masked: False
+        #raw: True # optional, False by default, "Expand variable reference" switcher, in API reference it is called "raw" https://docs.gitlab.com/ee/api/project_level_variables.html
         environment_scope: 'prod' # mandatory
       - key: TEST_FALSE
         value: "false" # do not put yaml boolean in value as GitLab vars are not boolean compatible, it will save them as "true" and "false" strings, put the same here
         variable_type: env_var
         protected: True
         masked: False
+        #raw: True # optional, False by default, "Expand variable reference" switcher, in API reference it is called "raw" https://docs.gitlab.com/ee/api/project_level_variables.html
         environment_scope: # you can use list of scopes here, it will be expanded to several vars in gitlab
           - 'prod'
           - 'staging'
       - variable_type: env_var # mandatory, env_var or file
         protected: True # mandatory
         masked: False # mandatory
+        #raw: True # optional, False by default, "Expand variable reference" switcher, in API reference it is called "raw" https://docs.gitlab.com/ee/api/project_level_variables.html
         environment_scope: 'dev/my-*' # mandatory
         key_values: # another more compact format to set multiple key-values for the same scope, type of var
           TEST1: XXX1
