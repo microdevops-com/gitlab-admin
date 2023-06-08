@@ -28,8 +28,14 @@ vars:
       # -m - include parents of merge
       CHANGED_FILES=$(git diff-tree -m --no-commit-id --name-only -r $CI_COMMIT_SHA)
       for F in ${CHANGED_FILES}; do
-        if [[ "${F}" == *.yaml ]]; then
+        if [[ "${F}" == *.yaml && -f "${F}" ]]; then
           echo Processing file: ${F}
           ./projects.py --apply-variables --yaml ${F}
+        elif [[ "${F}" == *.inc && -f "${F}" ]]; then
+          FILES_INCLUDE_CHANGED_FILE=$(grep -l -r ${F} projects)                                             
+          for I in ${FILES_INCLUDE_CHANGED_FILE}; do
+            echo Processing file: ${I}
+            ./projects.py --apply-variables --yaml ${I}
+          done
         fi
       done
