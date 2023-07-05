@@ -330,8 +330,6 @@ if __name__ == "__main__":
 
                 for group_dict in yaml_dict["groups"]:
 
-                    logger.info("Found group yaml definition for vars: {variables}".format(variables=group_dict["variables"]))
-
                     # Check group active
                     if group_dict["active"]:
                 
@@ -344,6 +342,8 @@ if __name__ == "__main__":
 
                             # CI Variables
                             if "variables" in group_dict:
+
+                                logger.info("Found group yaml definition for vars: {variables}".format(variables=group_dict["variables"]))
 
                                 # Always clean all vars before set
                                 variables_clean_all_before_set = True
@@ -362,8 +362,6 @@ if __name__ == "__main__":
 
                 for project_dict in yaml_dict["projects"]:
 
-                    logger.info("Found project yaml definition for vars: {variables}".format(variables=project_dict["variables"]))
-
                     # Check project active
                     if project_dict["active"]:
                 
@@ -376,6 +374,8 @@ if __name__ == "__main__":
 
                             # CI Variables
                             if "variables" in project_dict:
+
+                                logger.info("Found project yaml definition for vars: {variables}".format(variables=project_dict["variables"]))
 
                                 # Always clean all vars before set
                                 variables_clean_all_before_set = True
