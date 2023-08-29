@@ -82,12 +82,12 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
             if var_file_dict is None:
                 raise Exception("Config file error or missing: {0}".format(var_file))
 
-            # Expand quick key_values sets in variables from file
-            var_file_dict_expanded = []
+            # Expand quick key_values sets in variables from file, pre1 before expanding environment_scope
+            var_file_dict_expanded_pre1 = []
             for var in var_file_dict:
                 if "key_values" in var:
                     for k, v in var["key_values"].items():
-                        var_file_dict_expanded.append(
+                        var_file_dict_expanded_pre1.append(
                             {
                                 "variable_type": var["variable_type"],
                                 "protected": var["protected"],
@@ -96,6 +96,25 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                                 "environment_scope": var["environment_scope"],
                                 "key": k,
                                 "value": v
+                            }
+                        )
+                else:
+                    var_file_dict_expanded_pre1.append(var)
+
+            # Expand environment_scope if it is a list
+            var_file_dict_expanded = []
+            for var in var_file_dict_expanded_pre1:
+                if isinstance(var["environment_scope"], list):
+                    for env_scope in var["environment_scope"]:
+                        var_file_dict_expanded.append(
+                            {
+                                "variable_type": var["variable_type"],
+                                "protected": var["protected"],
+                                "masked": var["masked"],
+                                "raw": var["raw"] if "raw" in var else False,
+                                "environment_scope": env_scope,
+                                "key": var["key"],
+                                "value": var["value"]
                             }
                         )
                 else:
