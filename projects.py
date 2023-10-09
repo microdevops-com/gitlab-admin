@@ -675,6 +675,10 @@ if __name__ == "__main__":
                             p_mras = project.approvals.get()
                             p_mras.reset_approvals_on_push = project_dict["reset_approvals_on_push"]
                             p_mras.save()
+                        if "selective_code_owner_removals" in project_dict:
+                            p_mras = project.approvals.get()
+                            p_mras.selective_code_owner_removals = project_dict["selective_code_owner_removals"]
+                            p_mras.save()
                         if "disable_overriding_approvers_per_merge_request" in project_dict:
                             p_mras = project.approvals.get()
                             p_mras.disable_overriding_approvers_per_merge_request = project_dict["disable_overriding_approvers_per_merge_request"]

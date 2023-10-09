@@ -67,6 +67,7 @@ projects:
     wiki_access_level: disabled # optional
     approvals_before_merge: 1 # optional
     reset_approvals_on_push: True # optional
+    selective_code_owner_removals: False # disable
     disable_overriding_approvers_per_merge_request: True # optional
     merge_requests_author_approval: False # optional
     merge_requests_disable_committers_approval: True # optional
