@@ -542,6 +542,8 @@ if __name__ == "__main__":
                         project.visibility = project_dict["visibility"]
                         if "merge_method" in project_dict:
                             project.merge_method = project_dict["merge_method"]
+                        if "squash_option" in project_dict:
+                            project.squash_option = project_dict["squash_option"]
                         if "resolve_outdated_diff_discussions" in project_dict:
                             project.resolve_outdated_diff_discussions = project_dict["resolve_outdated_diff_discussions"]
                         if "only_allow_merge_if_pipeline_succeeds" in project_dict:
@@ -711,27 +713,28 @@ if __name__ == "__main__":
                             logger.info(f'Project skip_outdated_deployment_jobs set via api to {project_dict["skip_outdated_deployment_jobs"]}')
                         
                         # Squash settings
-                        if "squash_commits_when_merging" in project_dict:
-                            if project_dict["squash_commits_when_merging"] == "do_not_allow":
-                                squash_option = 0
-                            if project_dict["squash_commits_when_merging"] == "allow":
-                                squash_option = 3
-                            if project_dict["squash_commits_when_merging"] == "encourage":
-                                squash_option = 2
-                            if project_dict["squash_commits_when_merging"] == "require":
-                                squash_option = 1
-                            # This also lacks api support
-                            cur = conn.cursor()
-                            sql = "UPDATE project_settings SET squash_option={squash_option} WHERE project_id = {id}".format(squash_option=squash_option, id=project.id)
-                            try:
-                                cur.execute(sql)
-                                logger.info("Query execution status:")
-                                logger.info(cur.statusmessage)
-                                conn.commit()
-                            except Exception as e:
-                                raise Exception("Caught exception on query execution")
-                            cur.close()
-                            logger.info("Project squash_commits_when_merging set via db to {squash_option}".format(squash_option=project_dict["squash_commits_when_merging"]))
+                        # This was added to the API finally
+                        #if "squash_commits_when_merging" in project_dict:
+                        #    if project_dict["squash_commits_when_merging"] == "do_not_allow":
+                        #        squash_option = 0
+                        #    if project_dict["squash_commits_when_merging"] == "allow":
+                        #        squash_option = 3
+                        #    if project_dict["squash_commits_when_merging"] == "encourage":
+                        #        squash_option = 2
+                        #    if project_dict["squash_commits_when_merging"] == "require":
+                        #        squash_option = 1
+                        #    # This also lacks api support
+                        #    cur = conn.cursor()
+                        #    sql = "UPDATE project_settings SET squash_option={squash_option} WHERE project_id = {id}".format(squash_option=squash_option, id=project.id)
+                        #    try:
+                        #        cur.execute(sql)
+                        #        logger.info("Query execution status:")
+                        #        logger.info(cur.statusmessage)
+                        #        conn.commit()
+                        #    except Exception as e:
+                        #        raise Exception("Caught exception on query execution")
+                        #    cur.close()
+                        #    logger.info("Project squash_commits_when_merging set via db to {squash_option}".format(squash_option=project_dict["squash_commits_when_merging"]))
 
                         # Protected branches
                         if "protected_branches" in project_dict:
