@@ -294,6 +294,9 @@ if __name__ == "__main__":
     if GL_ADMIN_PRIVATE_TOKEN is None:
         raise Exception("Env var GL_ADMIN_PRIVATE_TOKEN missing")
 
+    # As there are no options that need db hack, always ignore db now
+    args.ignore_db = True
+
     if not (args.ignore_db or args.apply_variables):
 
         PG_DB_HOST = os.environ.get("PG_DB_HOST")
