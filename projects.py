@@ -125,8 +125,62 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                 if not any(v["key"] == var["key"] and v["environment_scope"] == var["environment_scope"] for v in gorp_dict_variables):
                     gorp_dict_variables.append(var)
 
+    # Normalize boolean values value field in gorp_dict_variables to string as gitlab returns - lowercase string
+    for var in gorp_dict_variables:
+        if str(var["value"]) == "True":
+            var["value"] = "true"
+        elif str(var["value"]) == "False":
+            var["value"] = "false"
+
+    # Check apply_variables_dry_run
+    if args.apply_variables_dry_run:
+
+        gorp_variables_list = gorp.variables.list(get_all=True)
+
+        for var in gorp_dict_variables:
+            var_found = False
+            for gorp_var in gorp_variables_list:
+                if gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"]:
+                    var_found = True
+                    # Compare existing vars with yaml vars
+                    # If any difference, print
+                    if (
+                        gorp_var.value != str(var["value"])
+                        or
+                        gorp_var.variable_type != var["variable_type"] 
+                        or
+                        gorp_var.protected != var["protected"]
+                        or
+                        gorp_var.masked != var["masked"]
+                        or
+                        gorp_var.raw != (var["raw"] if "raw" in var else False)
+                    ):
+                        print("changed: {scope} / {var}:".format(scope=var["environment_scope"], var=var["key"]))
+                        # Print old -> new
+                        if gorp_var.value != str(var["value"]):
+                            print("  value: {old} -> {new}".format(old=gorp_var.value, new=var["value"]))
+                        if gorp_var.variable_type != var["variable_type"]:
+                            print("  variable_type: {old} -> {new}".format(old=gorp_var.variable_type, new=var["variable_type"]))
+                        if gorp_var.protected != var["protected"]:
+                            print("  protected: {old} -> {new}".format(old=gorp_var.protected, new=var["protected"]))
+                        if gorp_var.masked != var["masked"]:
+                            print("  masked: {old} -> {new}".format(old=gorp_var.masked, new=var["masked"]))
+                        if gorp_var.raw != (var["raw"] if "raw" in var else False):
+                            print("  raw: {old} -> {new}".format(old=gorp_var.raw, new=var["raw"] if "raw" in var else False))
+            if not var_found:
+                print("new: {scope} / {var}".format(scope=var["environment_scope"], var=var["key"]))
+
+        # Check vars to delete
+        for gorp_var in gorp_variables_list:
+            var_found = False
+            for var in gorp_dict_variables:
+                if gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"]:
+                    var_found = True
+            if not var_found:
+                print("deleted: {scope} / {var}".format(scope=gorp_var.environment_scope, var=gorp_var.key))
+
     # Check variables_clean_all_before_set
-    if variables_clean_all_before_set:
+    elif variables_clean_all_before_set:
 
         # Use multithreading to speed up
         with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_MAX_WORKERS) as executor:
@@ -164,6 +218,12 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
 
                     logger.info("Deleted var {scope} / {var} because of variables_clean_all_before_set".format(scope=gorp_var.environment_scope, var=gorp_var.key))
 
+            # Ensure all threads are done
+            executor.shutdown(wait=True)
+
+        # Use multithreading to speed up
+        with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_MAX_WORKERS) as executor:
+
             # Just add all vars from scratch
             for var in gorp_dict_variables:
                 var_dict = {
@@ -178,11 +238,14 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                 executor.submit(gorp.variables.create, var_dict)
                 logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
 
+            # Ensure all threads are done
+            executor.shutdown(wait=True)
     else:
 
         # We cannot update vars as key for update is not scope safe, so we delete first if var state is not as needed
+        gorp_variables_list = gorp.variables.list(get_all=True)
         for var in gorp_dict_variables:
-            for gorp_var in gorp.variables.list(get_all=True):
+            for gorp_var in gorp_variables_list:
                 if gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"]:
                     if (
                         gorp_var.value != str(var["value"])
@@ -193,7 +256,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         or
                         gorp_var.masked != var["masked"]
                         or
-                        gorp_var.raw != var["raw"] if "raw" in var else False
+                        gorp_var.raw != (var["raw"] if "raw" in var else False)
                     ):
                         # gorp_var.delete()
                         # There is a bug (at least at python-gitlab 2.5.0):
@@ -247,8 +310,9 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         logger.info("Var {scope} / {var} did not match yaml, deleted to be updated".format(scope=var["environment_scope"], var=var["key"]))
 
         # Adding is scope safe, so add all missing vars
+        gorp_variables_list = gorp.variables.list(get_all=True)
         for var in gorp_dict_variables:
-            if not any(gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"] for gorp_var in gorp.variables.list(get_all=True)):
+            if not any(gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"] for gorp_var in gorp_variables_list):
                 var_dict = {
                     "key": var["key"],
                     "value": var["value"],
@@ -261,8 +325,9 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                 gorp.variables.create(var_dict)
                 logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
 
-    # Then save
-    gorp.save()
+    # Then save if not dry run variable changes
+    if not args.apply_variables_dry_run:
+        gorp.save()
 
 # Main
 
@@ -276,6 +341,7 @@ if __name__ == "__main__":
     parser.add_argument("--yaml", dest="yaml", help="use file FILE instead of default projects.yaml", nargs=1, metavar=("FILE"))
     parser.add_argument("--ignore-db", dest="ignore_db", help="ignore connect to db if do not use specific options", action="store_true")
     parser.add_argument("--variables-clean-all-before-set", dest="variables_clean_all_before_set", help="delete all variables before setting, useful to clean garbage", action="store_true")
+    parser.add_argument("--apply-variables-dry-run", dest="apply_variables_dry_run", help="together with --apply-variables leads to just show the diff between existing and defined in yaml vars without applying", action="store_true")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--setup-projects", dest="setup_projects", help="ensure projects created in GitLab, their settings setup", action="store_true")
     group.add_argument("--template-projects", dest="template_projects", help="update projects git repos from template using current user git creds", action="store_true")
