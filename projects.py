@@ -14,6 +14,7 @@ import psycopg2
 import datetime
 import requests
 import concurrent.futures
+from deepdiff import DeepDiff
 
 # Constants and envs
 
@@ -132,52 +133,57 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
         elif str(var["value"]) == "False":
             var["value"] = "false"
 
+    # Get and print diff between existing and defined in yaml vars
+
+    old_gorp_variables = gorp.variables.list(get_all=True)
+
+    for var in gorp_dict_variables:
+        var_found = False
+        for gorp_var in old_gorp_variables:
+            if gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"]:
+                var_found = True
+                # Compare existing vars with yaml vars
+                # If any difference, print
+                if (
+                    gorp_var.value != str(var["value"])
+                    or
+                    gorp_var.variable_type != var["variable_type"] 
+                    or
+                    gorp_var.protected != var["protected"]
+                    or
+                    gorp_var.masked != var["masked"]
+                    or
+                    gorp_var.raw != (var["raw"] if "raw" in var else False)
+                ):
+                    print("changed: {scope} / {var}:".format(scope=var["environment_scope"], var=var["key"]))
+                    # Print old -> new
+                    if gorp_var.value != str(var["value"]):
+                        print("  value: {old} -> {new}".format(old=gorp_var.value, new=var["value"]))
+                    if gorp_var.variable_type != var["variable_type"]:
+                        print("  variable_type: {old} -> {new}".format(old=gorp_var.variable_type, new=var["variable_type"]))
+                    if gorp_var.protected != var["protected"]:
+                        print("  protected: {old} -> {new}".format(old=gorp_var.protected, new=var["protected"]))
+                    if gorp_var.masked != var["masked"]:
+                        print("  masked: {old} -> {new}".format(old=gorp_var.masked, new=var["masked"]))
+                    if gorp_var.raw != (var["raw"] if "raw" in var else False):
+                        print("  raw: {old} -> {new}".format(old=gorp_var.raw, new=var["raw"] if "raw" in var else False))
+        if not var_found:
+            print("new: {scope} / {var}".format(scope=var["environment_scope"], var=var["key"]))
+
+    # Check vars to delete
+    for gorp_var in old_gorp_variables:
+        var_found = False
+        for var in gorp_dict_variables:
+            if gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"]:
+                var_found = True
+        if not var_found:
+            print("deleted: {scope} / {var}".format(scope=gorp_var.environment_scope, var=gorp_var.key))
+
     # Check apply_variables_dry_run
     if args.apply_variables_dry_run:
 
-        gorp_variables_list = gorp.variables.list(get_all=True)
-
-        for var in gorp_dict_variables:
-            var_found = False
-            for gorp_var in gorp_variables_list:
-                if gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"]:
-                    var_found = True
-                    # Compare existing vars with yaml vars
-                    # If any difference, print
-                    if (
-                        gorp_var.value != str(var["value"])
-                        or
-                        gorp_var.variable_type != var["variable_type"] 
-                        or
-                        gorp_var.protected != var["protected"]
-                        or
-                        gorp_var.masked != var["masked"]
-                        or
-                        gorp_var.raw != (var["raw"] if "raw" in var else False)
-                    ):
-                        print("changed: {scope} / {var}:".format(scope=var["environment_scope"], var=var["key"]))
-                        # Print old -> new
-                        if gorp_var.value != str(var["value"]):
-                            print("  value: {old} -> {new}".format(old=gorp_var.value, new=var["value"]))
-                        if gorp_var.variable_type != var["variable_type"]:
-                            print("  variable_type: {old} -> {new}".format(old=gorp_var.variable_type, new=var["variable_type"]))
-                        if gorp_var.protected != var["protected"]:
-                            print("  protected: {old} -> {new}".format(old=gorp_var.protected, new=var["protected"]))
-                        if gorp_var.masked != var["masked"]:
-                            print("  masked: {old} -> {new}".format(old=gorp_var.masked, new=var["masked"]))
-                        if gorp_var.raw != (var["raw"] if "raw" in var else False):
-                            print("  raw: {old} -> {new}".format(old=gorp_var.raw, new=var["raw"] if "raw" in var else False))
-            if not var_found:
-                print("new: {scope} / {var}".format(scope=var["environment_scope"], var=var["key"]))
-
-        # Check vars to delete
-        for gorp_var in gorp_variables_list:
-            var_found = False
-            for var in gorp_dict_variables:
-                if gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"]:
-                    var_found = True
-            if not var_found:
-                print("deleted: {scope} / {var}".format(scope=gorp_var.environment_scope, var=gorp_var.key))
+        # Do nothing
+        logger.info("--apply-variables-dry-run is used, doing nothing")
 
     # Check variables_clean_all_before_set
     elif variables_clean_all_before_set:
@@ -243,9 +249,9 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
     else:
 
         # We cannot update vars as key for update is not scope safe, so we delete first if var state is not as needed
-        gorp_variables_list = gorp.variables.list(get_all=True)
+        old_gorp_variables = gorp.variables.list(get_all=True)
         for var in gorp_dict_variables:
-            for gorp_var in gorp_variables_list:
+            for gorp_var in old_gorp_variables:
                 if gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"]:
                     if (
                         gorp_var.value != str(var["value"])
@@ -310,9 +316,9 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         logger.info("Var {scope} / {var} did not match yaml, deleted to be updated".format(scope=var["environment_scope"], var=var["key"]))
 
         # Adding is scope safe, so add all missing vars
-        gorp_variables_list = gorp.variables.list(get_all=True)
+        old_gorp_variables = gorp.variables.list(get_all=True)
         for var in gorp_dict_variables:
-            if not any(gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"] for gorp_var in gorp_variables_list):
+            if not any(gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"] for gorp_var in old_gorp_variables):
                 var_dict = {
                     "key": var["key"],
                     "value": var["value"],
@@ -324,10 +330,6 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                 }
                 gorp.variables.create(var_dict)
                 logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
-
-    # Then save if not dry run variable changes
-    if not args.apply_variables_dry_run:
-        gorp.save()
 
 # Main
 
@@ -424,6 +426,7 @@ if __name__ == "__main__":
                         # Get GitLab group
                         logger.info("Getting group {group}".format(group=group_dict["path"]))
                         group = gl.groups.get(group_dict["path"])
+                        old_group_dict = group.asdict()
 
                         # Set needed group params
                         if not args.dry_run_gitlab:
@@ -441,6 +444,9 @@ if __name__ == "__main__":
 
                             # Save
                             group.save()
+                            new_group_dict = group.asdict()
+                            if old_group_dict != new_group_dict:
+                                print(DeepDiff(old_group_dict, new_group_dict).pretty())
 
                         logger.info("Group {group} settings:".format(group=group_dict["path"]))
                         logger.info(group)
@@ -456,6 +462,7 @@ if __name__ == "__main__":
                         # Get GitLab project
                         logger.info("Getting project {project}".format(project=project_dict["path"]))
                         project = gl.projects.get(project_dict["path"])
+                        old_project_dict = project.asdict()
 
                         # Set needed project params
                         if not args.dry_run_gitlab:
@@ -473,6 +480,9 @@ if __name__ == "__main__":
 
                             # Save
                             project.save()
+                            new_project_dict = project.asdict()
+                            if old_project_dict != new_project_dict:
+                                print(DeepDiff(old_project_dict, new_project_dict).pretty())
 
                         logger.info("Project {project} settings:".format(project=project_dict["path"]))
                         logger.info(project)
@@ -495,6 +505,7 @@ if __name__ == "__main__":
                     try:
                         logger.info("Checking group {group}".format(group=group_dict["path"]))
                         group = gl.groups.get(group_dict["path"])
+                        old_group_dict = group.asdict()
                     except gitlab.exceptions.GitlabGetError as e:
 
                         # Create if not found
@@ -510,10 +521,12 @@ if __name__ == "__main__":
                             # Create group in parent
                             if not args.dry_run_gitlab:
                                 group = gl.groups.create({'name': group_dict["name"], 'path': group_path, 'parent_id': parent_group.id})
+                                old_group_dict = group.asdict()
                         else:
                             # Create group in root
                             if not args.dry_run_gitlab:
                                 group = gl.groups.create({'name': group_dict["name"], 'path': group_path})
+                                old_group_dict = group.asdict()
 
                     # Set needed group params
                     if not args.dry_run_gitlab:
@@ -557,6 +570,9 @@ if __name__ == "__main__":
 
                         # Save
                         group.save()
+                        new_group_dict = group.asdict()
+                        if old_group_dict != new_group_dict:
+                            print(DeepDiff(old_group_dict, new_group_dict).pretty())
 
                     logger.info("Group {group} settings:".format(group=group_dict["path"]))
                     logger.info(group)
@@ -579,6 +595,7 @@ if __name__ == "__main__":
                     try:
                         logger.info("Checking project {project}".format(project=project_dict["path"]))
                         project = gl.projects.get(project_dict["path"])
+                        old_project_dict = project.asdict()
                     except gitlab.exceptions.GitlabGetError as e:
                         # Create if not found
                         logger.info("Project {project}, creating".format(project=project_dict["path"]))
@@ -592,6 +609,7 @@ if __name__ == "__main__":
                         # Create project
                         if not args.dry_run_gitlab:
                             project = gl.projects.create({'name': project_dict["name"], 'namespace_id': group_id, 'path': project_path})
+                            old_project_dict = project.asdict()
                             # Add first files on creating
                             f = project.files.create(
                                 {
@@ -740,32 +758,60 @@ if __name__ == "__main__":
                         # MR approval rules
                         if "approvals_before_merge" in project_dict:
                             p_mras = project.approvals.get()
+                            old_p_mras_dict = p_mras.asdict()
                             p_mras.approvals_before_merge = project_dict["approvals_before_merge"]
                             p_mras.save()
+                            new_p_mras_dict = p_mras.asdict()
+                            if old_p_mras_dict != new_p_mras_dict:
+                                print(DeepDiff(old_p_mras_dict, new_p_mras_dict).pretty())
                         if "reset_approvals_on_push" in project_dict:
                             p_mras = project.approvals.get()
+                            old_p_mras_dict = p_mras.asdict()
                             p_mras.reset_approvals_on_push = project_dict["reset_approvals_on_push"]
                             p_mras.save()
+                            new_p_mras_dict = p_mras.asdict()
+                            if old_p_mras_dict != new_p_mras_dict:
+                                print(DeepDiff(old_p_mras_dict, new_p_mras_dict).pretty())
                         if "selective_code_owner_removals" in project_dict:
                             p_mras = project.approvals.get()
+                            old_p_mras_dict = p_mras.asdict()
                             p_mras.selective_code_owner_removals = project_dict["selective_code_owner_removals"]
                             p_mras.save()
+                            new_p_mras_dict = p_mras.asdict()
+                            if old_p_mras_dict != new_p_mras_dict:
+                                print(DeepDiff(old_p_mras_dict, new_p_mras_dict).pretty())
                         if "disable_overriding_approvers_per_merge_request" in project_dict:
                             p_mras = project.approvals.get()
+                            old_p_mras_dict = p_mras.asdict()
                             p_mras.disable_overriding_approvers_per_merge_request = project_dict["disable_overriding_approvers_per_merge_request"]
                             p_mras.save()
+                            new_p_mras_dict = p_mras.asdict()
+                            if old_p_mras_dict != new_p_mras_dict:
+                                print(DeepDiff(old_p_mras_dict, new_p_mras_dict).pretty())
                         if "merge_requests_author_approval" in project_dict:
                             p_mras = project.approvals.get()
+                            old_p_mras_dict = p_mras.asdict()
                             p_mras.merge_requests_author_approval = project_dict["merge_requests_author_approval"]
                             p_mras.save()
+                            new_p_mras_dict = p_mras.asdict()
+                            if old_p_mras_dict != new_p_mras_dict:
+                                print(DeepDiff(old_p_mras_dict, new_p_mras_dict).pretty())
                         if "merge_requests_disable_committers_approval" in project_dict:
                             p_mras = project.approvals.get()
+                            old_p_mras_dict = p_mras.asdict()
                             p_mras.merge_requests_disable_committers_approval = project_dict["merge_requests_disable_committers_approval"]
                             p_mras.save()
+                            new_p_mras_dict = p_mras.asdict()
+                            if old_p_mras_dict != new_p_mras_dict:
+                                print(DeepDiff(old_p_mras_dict, new_p_mras_dict).pretty())
                         if "require_password_to_approve" in project_dict:
                             p_mras = project.approvals.get()
+                            old_p_mras_dict = p_mras.asdict()
                             p_mras.require_password_to_approve = project_dict["require_password_to_approve"]
                             p_mras.save()
+                            new_p_mras_dict = p_mras.asdict()
+                            if old_p_mras_dict != new_p_mras_dict:
+                                print(DeepDiff(old_p_mras_dict, new_p_mras_dict).pretty())
                         
                         # Skip outdated deployment jobs
                         if "skip_outdated_deployment_jobs" in project_dict:
@@ -922,6 +968,7 @@ if __name__ == "__main__":
 
                             # Get existing rules, None if not exist
                             pr = project.pushrules.get()
+                            old_pr_dict = pr.asdict()
                             if pr is None:
                                 # At least one option is required to create, use commit_committer_check
                                 project.pushrules.create({'commit_committer_check': project_dict["push_rules"]["commit_committer_check"]})
@@ -950,9 +997,15 @@ if __name__ == "__main__":
                             if "max_file_size" in project_dict["push_rules"]:
                                 pr.max_file_size = project_dict["push_rules"]["max_file_size"]
                             pr.save()
+                            new_pr_dict = pr.asdict()
+                            if old_pr_dict != new_pr_dict:
+                                print(DeepDiff(old_pr_dict, new_pr_dict).pretty())
 
                         # Save
                         project.save()
+                        new_project_dict = project.asdict()
+                        if old_project_dict != new_project_dict:
+                            print(DeepDiff(old_project_dict, new_project_dict).pretty())
                     
                     logger.info("Project {project} settings:".format(project=project_dict["path"]))
                     logger.info(project)
