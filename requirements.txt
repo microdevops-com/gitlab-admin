@@ -5,3 +5,4 @@ psycopg2-binary==2.9.6
 #ipython # for jira and may be outdated
 requests==2.31.0
 deepdiff
+rich

@@ -14,6 +14,7 @@ import psycopg2
 import datetime
 import requests
 import concurrent.futures
+from rich import print_json
 from deepdiff import DeepDiff
 
 # Constants and envs
@@ -346,9 +347,11 @@ if __name__ == "__main__":
     parser.add_argument("--apply-variables-dry-run", dest="apply_variables_dry_run", help="together with --apply-variables leads to just show the diff between existing and defined in yaml vars without applying", action="store_true")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--setup-projects", dest="setup_projects", help="ensure projects created in GitLab, their settings setup", action="store_true")
+    group.add_argument("--dump-projects", dest="dump_projects", help="dump project settings", action="store_true")
     group.add_argument("--template-projects", dest="template_projects", help="update projects git repos from template using current user git creds", action="store_true")
     group.add_argument("--bulk-delete-tags-in-projects", dest="bulk_delete_tags_in_projects", help="bulk delete tags in projects", action="store_true")
     group.add_argument("--setup-groups", dest="setup_groups", help="ensure groups created in GitLab, their settings setup", action="store_true")
+    group.add_argument("--dump-groups", dest="dump_groups", help="dump group settings", action="store_true")
     group.add_argument("--apply-variables", dest="apply_variables", help="apply only variables for all groups and projects in yaml which already must exist, always cleans vars before apply", action="store_true")
     args = parser.parse_args()
 
@@ -487,6 +490,21 @@ if __name__ == "__main__":
                         logger.info("Project {project} settings:".format(project=project_dict["path"]))
                         logger.info(project)
 
+        if args.dump_groups:
+
+            gl = gitlab.Gitlab(yaml_dict["gitlab"]["url"], private_token=GL_ADMIN_PRIVATE_TOKEN)
+            gl.auth()
+
+            # For groups
+            for group_dict in yaml_dict["groups"]:
+                if group_dict["active"]:
+                    # Get GitLab group
+                    logger.info("Getting group {group}".format(group=group_dict["path"]))
+                    group = gl.groups.get(group_dict["path"])
+                    logger.info("Group {group} settings:".format(group=group_dict["path"]))
+                    # Convert asdict to json to print
+                    print_json(json.dumps(group.asdict()))
+
         if args.setup_groups:
             
             # Connect to GitLab
@@ -576,6 +594,21 @@ if __name__ == "__main__":
 
                     logger.info("Group {group} settings:".format(group=group_dict["path"]))
                     logger.info(group)
+
+        if args.dump_projects:
+
+            gl = gitlab.Gitlab(yaml_dict["gitlab"]["url"], private_token=GL_ADMIN_PRIVATE_TOKEN)
+            gl.auth()
+
+            # For projects
+            for project_dict in yaml_dict["projects"]:
+                if project_dict["active"]:
+                    # Get GitLab project
+                    logger.info("Getting project {project}".format(project=project_dict["path"]))
+                    project = gl.projects.get(project_dict["path"])
+                    logger.info("Project {project} settings:".format(project=project_dict["path"]))
+                    # Convert asdict to json to print
+                    print_json(json.dumps(project.asdict()))
 
         if args.setup_projects:
             
