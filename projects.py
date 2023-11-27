@@ -16,6 +16,9 @@ import requests
 import concurrent.futures
 from rich import print_json
 from deepdiff import DeepDiff
+# Import GraphQL client
+from gql import gql, Client
+from gql.transport.requests import RequestsHTTPTransport
 
 # Constants and envs
 
@@ -1033,6 +1036,63 @@ if __name__ == "__main__":
                             new_pr_dict = pr.asdict()
                             if old_pr_dict != new_pr_dict:
                                 print(DeepDiff(old_pr_dict, new_pr_dict).pretty())
+
+                        # Settings available only via GraphQL
+
+                        # Create a GraphQL client using the defined transport, connecting to the GitLab instance
+                        graphql_transport = RequestsHTTPTransport(url=yaml_dict["gitlab"]["url"] + "/api/graphql", headers={"PRIVATE-TOKEN": GL_ADMIN_PRIVATE_TOKEN}, use_json=True)
+                        graphql_client = Client(transport=graphql_transport, fetch_schema_from_transport=True)
+
+                        # cicd:token_access_limit_access_to_this_project
+                        if "cicd" in project_dict and "token_access_limit_access_to_this_project" in project_dict["cicd"]:
+                            # Set ProjectCiCdSetting
+                            # https://docs.gitlab.com/ee/api/graphql/reference/index.html#projectcicdsetting
+                            # https://docs.gitlab.com/ee/api/graphql/reference/index.html#mutationprojectcicdsettingsupdate
+                            # https://docs.gitlab.com/ee/api/graphql/getting_started.html#update-project-settings
+                            mutation = gql(
+                                """
+                                mutation cicd_token_access_limit_access_to_this_project($fullPath: ID!, $inboundJobTokenScopeEnabled: Boolean!) {
+                                  projectCiCdSettingsUpdate(input: {fullPath: $fullPath, inboundJobTokenScopeEnabled: $inboundJobTokenScopeEnabled}) {
+                                    errors
+                                    ciCdSettings {
+                                      inboundJobTokenScopeEnabled
+                                    }
+                                  }
+                                }
+                                """
+                            )
+                            mutation_variables = {
+                                "fullPath": project.path_with_namespace,
+                                "inboundJobTokenScopeEnabled": project_dict["cicd"]["token_access_limit_access_to_this_project"]
+                            }
+                            graphql_result = graphql_client.execute(mutation, variable_values=mutation_variables)
+                            # Log result
+                            logger.info("Project {project} cicd:token_access_limit_access_to_this_project GraphQL result:".format(project=project_dict["path"]))
+                            logger.info(graphql_result)
+
+                        # cicd:projects_with_access
+                        if "cicd" in project_dict and "projects_with_access" in project_dict["cicd"]:
+                            # Add Projects with access, Delete not yet supported
+                            # https://docs.gitlab.com/ee/api/graphql/reference/index.html#mutationcijobtokenscopeaddproject
+                            # Each project in the list should be added with a separate mutation
+                            for project_with_access in project_dict["cicd"]["projects_with_access"]:
+                                mutation = gql(
+                                    """
+                                    mutation cicd_projects_with_access($projectPath: ID!, $targetProjectPath: ID!) {
+                                      ciJobTokenScopeAddProject(input: {projectPath: $projectPath, targetProjectPath: $targetProjectPath}) {
+                                        errors
+                                      }
+                                    }
+                                    """
+                                )
+                                mutation_variables = {
+                                    "projectPath": project.path_with_namespace,
+                                    "targetProjectPath": project_with_access
+                                }
+                                graphql_result = graphql_client.execute(mutation, variable_values=mutation_variables)
+                                # Log result
+                                logger.info("Project {project} cicd:projects_with_access GraphQL result:".format(project=project_dict["path"]))
+                                logger.info(graphql_result)
 
                         # Save
                         project.save()

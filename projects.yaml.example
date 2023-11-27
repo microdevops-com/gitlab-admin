@@ -131,6 +131,11 @@ projects:
     variables_clean_all_before_set: True # optional, delete all variables before setting, useful to clean garbage, also it runs much faster than updating, disable only if you need to keep some manually added values
     #variables_from_files: # optional, use with variables (or add variables: [] if only variables_from_files needed), file should contain a list of variables (without "variables:" key)
     #  - var_file.inc # variables defined here below in "variables:" have higher priority than defined in files
+    cicd: # optional, https://docs.gitlab.com/ee/ci/jobs/ci_job_token.html#allow-access-to-your-project-with-a-job-token
+      token_access_limit_access_to_this_project: False
+      projects_with_access: # projects are only added, to cleanup - remove manually
+        - group1/project1
+        - group2/project2
     variables: # optional
       - key: TEST1 # mandatory
         value: XXX1 # mandatory
