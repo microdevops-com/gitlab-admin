@@ -1100,7 +1100,7 @@ if __name__ == "__main__":
                     logger.info(script)
                     subprocess.run(script, shell=True, universal_newlines=True, check=True, executable="/bin/bash")
 
-        if args.bulk_delete_tags_in_projects:
+        if args.bulk_delete_tags_in_projects and "projects" in yaml_dict:
             
             # Connect to GitLab
             gl = gitlab.Gitlab(yaml_dict["gitlab"]["url"], private_token=GL_ADMIN_PRIVATE_TOKEN)
@@ -1151,7 +1151,9 @@ if __name__ == "__main__":
                                         logger.info("delete_in_bulk run for {path}".format(path=repo.path))
                                     # GitLab allows bulk delete only once per hour so log and ignore
                                     except gitlab.exceptions.GitlabDeleteError as e:
-                                        logger.exception(e)
+                                        logger.info(e)
+                                    except gitlab.exceptions.GitlabHttpError as e:
+                                        logger.info(e)
 
         # Close connection
         if not (args.ignore_db or args.apply_variables):
