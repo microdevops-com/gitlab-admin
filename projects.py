@@ -346,6 +346,7 @@ if __name__ == "__main__":
     parser.add_argument("--git-push", dest="git_push", help="push after commit", action="store_true")
     parser.add_argument("--dry-run-gitlab", dest="dry_run_gitlab", help="no new objects created in gitlab", action="store_true")
     parser.add_argument("--yaml", dest="yaml", help="use file FILE instead of default projects.yaml", nargs=1, metavar=("FILE"))
+    #parser.add_argument("--ignore-db", dest="ignore_db", help="ignore connect to db if do not use specific options", action="store_true")
     parser.add_argument("--variables-clean-all-before-set", dest="variables_clean_all_before_set", help="delete all variables before setting, useful to clean garbage", action="store_true")
     parser.add_argument("--apply-variables-dry-run", dest="apply_variables_dry_run", help="together with --apply-variables leads to just show the diff between existing and defined in yaml vars without applying", action="store_true")
     group = parser.add_mutually_exclusive_group(required=True)
@@ -865,6 +866,18 @@ if __name__ == "__main__":
 
                         # Squash settings
                         # This was added to the API finally
+                        # Just as and old sql hack example left as comment
+                        # cur = conn.cursor()
+                        # sql = "UPDATE project_settings SET squash_option={squash_option} WHERE project_id = {id}".format(squash_option=squash_option, id=project.id)
+                        # try:
+                        #     cur.execute(sql)
+                        #     logger.info("Query execution status:")
+                        #     logger.info(cur.statusmessage)
+                        #     conn.commit()
+                        # except Exception as e:
+                        #     raise Exception("Caught exception on query execution")
+                        # cur.close()
+                        # logger.info("Project squash_commits_when_merging set via db to {squash_option}".format(squash_option=project_dict["squash_commits_when_merging"]))
                         if "squash_commits_when_merging" in project_dict:
                             logger.warning('squash_commits_when_merging is deprecated. Use squash_option')
 
@@ -892,9 +905,9 @@ if __name__ == "__main__":
                                 diff = DeepDiff(old_p_branch, new_p_branch, exclude_regex_paths=[r"root\[.+\]\[.+\]\['id'\]", r"root\['id'\]"])
                                 if diff:
                                     print("Protected branch \"{branch_name}\" config diff:".format(branch_name=branch["name"]))
-                                    print('-------------------------------')
+                                    print("-------------------------------")
                                     print(diff.pretty())
-                                    print('-------------------------------')
+                                    print("-------------------------------")
                             project.save()
                         # Protected tags
                         if "protected_tags" in project_dict:
@@ -1243,9 +1256,9 @@ if __name__ == "__main__":
                                         logger.info(e)
 
                     else:
-                        logger.warning("DRY-RUN mode. Skip..")
+                        logger.warning("--dry-run mode, skipping.")
                 else:
-                    logger.info("Project not active or bulk_delete_tags is emtpy. Skip..")
+                    logger.info("Project not active or bulk_delete_tags is emtpy. Skipping.")
         # Close connection
         if not (args.ignore_db or args.apply_variables):
             conn.close()
