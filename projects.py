@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import logging
 
 # Import common code
 from common import *
 
 import gitlab
-import glob
+import argparse
 import textwrap
 import subprocess
 import json
 import re
-import psycopg2
 import datetime
 import requests
 import concurrent.futures
+import psycopg2
 from rich import print_json
 from deepdiff import DeepDiff
 # Import GraphQL client
@@ -22,7 +23,7 @@ from gql.transport.requests import RequestsHTTPTransport
 
 # Constants and envs
 
-LOGO="Projects"
+LOGO = "Projects"
 WORK_DIR = "./"
 LOG_DIR = "./log"
 LOG_FILE = "projects.log"
@@ -151,7 +152,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                 if (
                     gorp_var.value != str(var["value"])
                     or
-                    gorp_var.variable_type != var["variable_type"] 
+                    gorp_var.variable_type != var["variable_type"]
                     or
                     gorp_var.protected != var["protected"]
                     or
@@ -187,7 +188,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
     if args.apply_variables_dry_run:
 
         # Do nothing
-        logger.info("--apply-variables-dry-run is used, doing nothing")
+        logger.warning("--apply-variables-dry-run is used, doing nothing")
 
     # Check variables_clean_all_before_set
     elif variables_clean_all_before_set:
@@ -260,7 +261,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                     if (
                         gorp_var.value != str(var["value"])
                         or
-                        gorp_var.variable_type != var["variable_type"] 
+                        gorp_var.variable_type != var["variable_type"]
                         or
                         gorp_var.protected != var["protected"]
                         or
@@ -345,7 +346,6 @@ if __name__ == "__main__":
     parser.add_argument("--git-push", dest="git_push", help="push after commit", action="store_true")
     parser.add_argument("--dry-run-gitlab", dest="dry_run_gitlab", help="no new objects created in gitlab", action="store_true")
     parser.add_argument("--yaml", dest="yaml", help="use file FILE instead of default projects.yaml", nargs=1, metavar=("FILE"))
-    parser.add_argument("--ignore-db", dest="ignore_db", help="ignore connect to db if do not use specific options", action="store_true")
     parser.add_argument("--variables-clean-all-before-set", dest="variables_clean_all_before_set", help="delete all variables before setting, useful to clean garbage", action="store_true")
     parser.add_argument("--apply-variables-dry-run", dest="apply_variables_dry_run", help="together with --apply-variables leads to just show the diff between existing and defined in yaml vars without applying", action="store_true")
     group = parser.add_mutually_exclusive_group(required=True)
@@ -362,7 +362,7 @@ if __name__ == "__main__":
     if args.debug:
         logger = set_logger(logging.DEBUG, LOG_DIR, LOG_FILE)
     else:
-        logger = set_logger(logging.ERROR, LOG_DIR, LOG_FILE)
+        logger = set_logger(logging.WARNING, LOG_DIR, LOG_FILE)
 
     GL_ADMIN_PRIVATE_TOKEN = os.environ.get("GL_ADMIN_PRIVATE_TOKEN")
     if GL_ADMIN_PRIVATE_TOKEN is None:
@@ -407,7 +407,7 @@ if __name__ == "__main__":
             yaml_dict = load_yaml("{0}/{1}".format(WORK_DIR, PROJECTS_YAML), logger)
             if yaml_dict is None:
                 raise Exception("Config file error or missing: {0}/{1}".format(WORK_DIR, PROJECTS_YAML))
-        
+
         # Connect to PG
         if not (args.ignore_db or args.apply_variables):
             dsn = "host={} dbname={} user={} password={}".format(PG_DB_HOST, PG_DB_NAME, PG_DB_USER, PG_DB_PASS)
@@ -416,7 +416,7 @@ if __name__ == "__main__":
         # Do tasks
 
         if args.apply_variables:
-            
+
             # Connect to GitLab
             gl = gitlab.Gitlab(yaml_dict["gitlab"]["url"], private_token=GL_ADMIN_PRIVATE_TOKEN)
             gl.auth()
@@ -428,7 +428,7 @@ if __name__ == "__main__":
 
                     # Check group active
                     if group_dict["active"]:
-                
+
                         # Get GitLab group
                         logger.info("Getting group {group}".format(group=group_dict["path"]))
                         group = gl.groups.get(group_dict["path"])
@@ -464,7 +464,7 @@ if __name__ == "__main__":
 
                     # Check project active
                     if project_dict["active"]:
-                
+
                         # Get GitLab project
                         logger.info("Getting project {project}".format(project=project_dict["path"]))
                         project = gl.projects.get(project_dict["path"])
@@ -509,7 +509,7 @@ if __name__ == "__main__":
                     print_json(json.dumps(group.asdict()))
 
         if args.setup_groups:
-            
+
             # Connect to GitLab
             gl = gitlab.Gitlab(yaml_dict["gitlab"]["url"], private_token=GL_ADMIN_PRIVATE_TOKEN)
             gl.auth()
@@ -521,7 +521,7 @@ if __name__ == "__main__":
 
                 # Check group active
                 if group_dict["active"]:
-            
+
                     # Get GitLab group
                     try:
                         logger.info("Checking group {group}".format(group=group_dict["path"]))
@@ -614,7 +614,7 @@ if __name__ == "__main__":
                     print_json(json.dumps(project.asdict()))
 
         if args.setup_projects:
-            
+
             # Connect to GitLab
             gl = gitlab.Gitlab(yaml_dict["gitlab"]["url"], private_token=GL_ADMIN_PRIVATE_TOKEN)
             gl.auth()
@@ -626,7 +626,7 @@ if __name__ == "__main__":
 
                 # Check project active
                 if project_dict["active"]:
-            
+
                     # Get GitLab project
                     try:
                         logger.info("Checking project {project}".format(project=project_dict["path"]))
@@ -764,7 +764,7 @@ if __name__ == "__main__":
                                     headers={'PRIVATE-TOKEN': GL_ADMIN_PRIVATE_TOKEN}
                                 )
                                 response = response.json()
-                                
+
                                 # check token if active token exist
                                 if response:
                                     for token in response:
@@ -848,7 +848,7 @@ if __name__ == "__main__":
                             new_p_mras_dict = p_mras.asdict()
                             if old_p_mras_dict != new_p_mras_dict:
                                 print(DeepDiff(old_p_mras_dict, new_p_mras_dict).pretty())
-                        
+
                         # Skip outdated deployment jobs
                         if "skip_outdated_deployment_jobs" in project_dict:
                             project_id = project.id
@@ -862,46 +862,39 @@ if __name__ == "__main__":
                             )
 
                             logger.info(f'Project skip_outdated_deployment_jobs set via api to {project_dict["skip_outdated_deployment_jobs"]}')
-                        
+
                         # Squash settings
                         # This was added to the API finally
-                        #if "squash_commits_when_merging" in project_dict:
-                        #    if project_dict["squash_commits_when_merging"] == "do_not_allow":
-                        #        squash_option = 0
-                        #    if project_dict["squash_commits_when_merging"] == "allow":
-                        #        squash_option = 3
-                        #    if project_dict["squash_commits_when_merging"] == "encourage":
-                        #        squash_option = 2
-                        #    if project_dict["squash_commits_when_merging"] == "require":
-                        #        squash_option = 1
-                        #    # This also lacks api support
-                        #    cur = conn.cursor()
-                        #    sql = "UPDATE project_settings SET squash_option={squash_option} WHERE project_id = {id}".format(squash_option=squash_option, id=project.id)
-                        #    try:
-                        #        cur.execute(sql)
-                        #        logger.info("Query execution status:")
-                        #        logger.info(cur.statusmessage)
-                        #        conn.commit()
-                        #    except Exception as e:
-                        #        raise Exception("Caught exception on query execution")
-                        #    cur.close()
-                        #    logger.info("Project squash_commits_when_merging set via db to {squash_option}".format(squash_option=project_dict["squash_commits_when_merging"]))
+                        if "squash_commits_when_merging" in project_dict:
+                            logger.warning('squash_commits_when_merging is deprecated. Use squash_option')
 
                         # Protected branches
                         if "protected_branches" in project_dict:
                             for branch in project_dict["protected_branches"]:
+
                                 if any(project_branch.name == branch["name"] for project_branch in project.protectedbranches.list(get_all=True)):
                                     p_branch = project.protectedbranches.get(branch["name"])
+                                    old_p_branch = project.protectedbranches.get(branch["name"]).asdict()
                                     p_branch.delete()
+                                else:
+                                    old_p_branch = {}
+
                                 project.protectedbranches.create(
                                     {
                                         'name': branch["name"],
                                         'push_access_level': branch["push_access_level"],
                                         'merge_access_level': branch["merge_access_level"],
-                                        'merge_access_level': branch["merge_access_level"],
+                                        'allow_force_push': default(lambda: branch["allow_force_push"], False),
                                         'code_owner_approval_required': branch["code_owner_approval_required"]
                                     }
                                 )
+                                new_p_branch = project.protectedbranches.get(branch["name"]).asdict()
+                                diff = DeepDiff(old_p_branch, new_p_branch, exclude_regex_paths=[r"root\[.+\]\[.+\]\['id'\]", r"root\['id'\]"])
+                                if diff:
+                                    print("Protected branch \"{branch_name}\" config diff:".format(branch_name=branch["name"]))
+                                    print('-------------------------------')
+                                    print(diff.pretty())
+                                    print('-------------------------------')
                             project.save()
                         # Protected tags
                         if "protected_tags" in project_dict:
@@ -910,6 +903,7 @@ if __name__ == "__main__":
                                     p_tag = project.protectedtags.get(tag["name"])
                                     p_tag.delete()
                                 project.protectedtags.create({'name': tag["name"], 'create_access_level': tag["create_access_level"]})
+
                         # MR approval rules (should be done after branch protection reset)
                         if "merge_request_approval_rules" in project_dict:
                             # Empty list before setting
@@ -1099,7 +1093,7 @@ if __name__ == "__main__":
                         new_project_dict = project.asdict()
                         if old_project_dict != new_project_dict:
                             print(DeepDiff(old_project_dict, new_project_dict).pretty())
-                    
+
                     logger.info("Project {project} settings:".format(project=project_dict["path"]))
                     logger.info(project)
                     logger.info("Project {project} deploy keys:".format(project=project_dict["path"]))
@@ -1126,9 +1120,9 @@ if __name__ == "__main__":
                         logger.info(project.variables.list(get_all=True))
                         for project_var in project.variables.list(get_all=True):
                             logger.info(project_var)
-            
+
         if args.template_projects:
-            
+
             # Connect to GitLab
             gl = gitlab.Gitlab(yaml_dict["gitlab"]["url"], private_token=GL_ADMIN_PRIVATE_TOKEN)
             gl.auth()
@@ -1140,7 +1134,7 @@ if __name__ == "__main__":
 
                 # Check project active
                 if project_dict["active"] and "template" in project_dict:
-            
+
                     # Get GitLab project for
                     project = gl.projects.get(project_dict["path"])
                     logger.info("Project {project} ssh_url_to_repo: {ssh_url_to_repo}, path_with_namespace: {path_with_namespace}".format(project=project_dict["path"], path_with_namespace=project.path_with_namespace, ssh_url_to_repo=project.ssh_url_to_repo))
@@ -1194,7 +1188,7 @@ if __name__ == "__main__":
                     subprocess.run(script, shell=True, universal_newlines=True, check=True, executable="/bin/bash")
 
         if args.bulk_delete_tags_in_projects and "projects" in yaml_dict:
-            
+
             # Connect to GitLab
             gl = gitlab.Gitlab(yaml_dict["gitlab"]["url"], private_token=GL_ADMIN_PRIVATE_TOKEN)
             gl.auth()
@@ -1206,7 +1200,7 @@ if __name__ == "__main__":
 
                 # Check project active and 
                 if project_dict["active"] and "bulk_delete_tags" in project_dict:
-            
+
                     # Get GitLab project for
                     project = gl.projects.get(project_dict["path"])
                     logger.info("Project {project} ssh_url_to_repo: {ssh_url_to_repo}, path_with_namespace: {path_with_namespace}".format(project=project_dict["path"], path_with_namespace=project.path_with_namespace, ssh_url_to_repo=project.ssh_url_to_repo))
@@ -1248,6 +1242,10 @@ if __name__ == "__main__":
                                     except gitlab.exceptions.GitlabHttpError as e:
                                         logger.info(e)
 
+                    else:
+                        logger.warning("DRY-RUN mode. Skip..")
+                else:
+                    logger.info("Project not active or bulk_delete_tags is emtpy. Skip..")
         # Close connection
         if not (args.ignore_db or args.apply_variables):
             conn.close()

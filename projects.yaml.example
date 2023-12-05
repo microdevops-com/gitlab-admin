@@ -78,6 +78,7 @@ projects:
         push_access_level: 0
         merge_access_level: 40
         code_owner_approval_required: True
+        allow_force_push: True
     protected_tags: # optional
       - name: 'v*'
         create_access_level: 40
