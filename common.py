@@ -1,16 +1,10 @@
 # -*- coding: utf-8 -*-
 import os
-import shutil
-import sys
-import time
-import datetime
 import yaml
 import logging
 from logging.handlers import RotatingFileHandler
 from collections import OrderedDict
 import json
-import argparse
-#import pdb
 
 # Custom Exceptions
 class DictError(Exception):
@@ -77,3 +71,10 @@ def set_logger(console_level, log_dir, log_file):
     logger.addHandler(log_handler)
     logger.addHandler(console_handler)
     return logger
+
+
+def default(x, default):
+    try:
+        return x()
+    except KeyError:
+        return default
