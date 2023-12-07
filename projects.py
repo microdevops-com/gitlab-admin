@@ -6,7 +6,6 @@ import logging
 from common import *
 
 import gitlab
-import argparse
 import textwrap
 import subprocess
 import json
