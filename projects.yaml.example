@@ -37,6 +37,12 @@ projects:
       - name: gitlab-deploy-token
         scopes:
           - read_registry
+    access_tokens: # optional
+      - name: test
+        scopes:
+          - api
+        access_level: 30 # optional
+        expires_at: "YYYY-MM-DD" # do not remove quotes, the date cannot be set later than the maximum allowable lifetime of an access token.
     shared_runners_enabled: False
     merge_method: rebase_merge # optional: merge, rebase_merge, ff
     resolve_outdated_diff_discussions: True # optional
@@ -117,8 +123,9 @@ projects:
         image_repo_regex: .*
         name_regex_delete: (?:^v\d+-\d+-\d+$|^master$)
         keep_n: 10 # optional
-    push_rules: # optional
-      commit_committer_check: False # requited, all other push_rules sub options are optional
+    push_rules: # optional, check https://docs.gitlab.com/ee/api/projects.html for the details
+      commit_committer_check: False # required, if push_rules key used, all other push_rules sub options are optional
+      commit_committer_name_check: False
       reject_unsigned_commits: False
       deny_delete_tag: False
       member_check: False

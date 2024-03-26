@@ -19,6 +19,7 @@ from deepdiff import DeepDiff
 # Import GraphQL client
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
+import time
 
 # Constants and envs
 
@@ -173,6 +174,11 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         print("  raw: {old} -> {new}".format(old=gorp_var.raw, new=var["raw"] if "raw" in var else False))
         if not var_found:
             print("new: {scope} / {var}".format(scope=var["environment_scope"], var=var["key"]))
+            print("  value: {value}".format(value=var["value"]))
+            print("  variable_type: {variable_type}".format(variable_type=var["variable_type"]))
+            print("  protected: {protected}".format(protected=var["protected"]))
+            print("  masked: {masked}".format(masked=var["masked"]))
+            print("  raw: {raw}".format(raw=var["raw"] if "raw" in var else False))
 
     # Check vars to delete
     for gorp_var in old_gorp_variables:
@@ -182,6 +188,11 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                 var_found = True
         if not var_found:
             print("deleted: {scope} / {var}".format(scope=gorp_var.environment_scope, var=gorp_var.key))
+            print("  value: {value}".format(value=gorp_var.value))
+            print("  variable_type: {variable_type}".format(variable_type=gorp_var.variable_type))
+            print("  protected: {protected}".format(protected=gorp_var.protected))
+            print("  masked: {masked}".format(masked=gorp_var.masked))
+            print("  raw: {raw}".format(raw=gorp_var.raw))
 
     # Check apply_variables_dry_run
     if args.apply_variables_dry_run:
@@ -231,25 +242,56 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
             # Ensure all threads are done
             executor.shutdown(wait=True)
 
-        # Use multithreading to speed up
-        with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_MAX_WORKERS) as executor:
+        # Define a function to use in multithreading
+        def create_var(var):
+            try:
+                gorp.variables.create(var)
+            except gitlab.exceptions.GitlabCreateError as e:
+                logger.error("Error creating var {scope} / {var}, but the script continues".format(scope=var["environment_scope"], var=var["key"]))
+                logger.error(e)
+                if var["masked"] and (" " in var["value"] or "," in var["value"]):
+                    logger.error("Masked var {scope} / {var} has space or comma in value, so it is not created".format(scope=var["environment_scope"], var=var["key"]))
 
-            # Just add all vars from scratch
-            for var in gorp_dict_variables:
-                var_dict = {
-                    "key": var["key"],
-                    "value": var["value"],
-                    "variable_type": var["variable_type"],
-                    "protected": var["protected"],
-                    "masked": var["masked"],
-                    "raw": var["raw"] if "raw" in var else False,
-                    "environment_scope": var["environment_scope"]
-                }
-                executor.submit(gorp.variables.create, var_dict)
-                logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
+        # Just add all vars from scratch
+
+        # We need to divide iterations per env scope, so only vars from one scope processed, wait for all threads to finish, then next scope.
+        # We need to create vars for the env scopes shorter by name first, so we sort by length.
+        # That is needed to mitigate a bug in GitLab scope matching, e.g.:
+        #   you have a var with the scope "*/*/dev-*" and the same named var for the scope "*/*/dev-xxx*",
+        #   if you create (so it will have higher id in pg db) the var with "*/*/dev-xxx*" first, it will be wrongly matched by GitLab to the "*/*/dev-*" scope,
+        #   but if you ensure the "*/*/dev-*" var is created first, it will be matched correctly.
+
+        # Find all unique env scopes and sort by length
+        env_scopes = list(set(var["environment_scope"] for var in gorp_dict_variables))
+        env_scopes.sort(key=len)
+
+        # For each env scope
+        for curr_env_scope in env_scopes:
+
+            # Use multithreading to speed up
+            with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_MAX_WORKERS) as executor:
+
+                # Create vars for the env scope
+                for var in gorp_dict_variables:
+                    if var["environment_scope"] == curr_env_scope:
+                        var_dict = {
+                            "key": var["key"],
+                            "value": var["value"],
+                            "variable_type": var["variable_type"],
+                            "protected": var["protected"],
+                            "masked": var["masked"],
+                            "raw": var["raw"] if "raw" in var else False,
+                            "environment_scope": var["environment_scope"]
+                        }
+                        executor.submit(create_var, var_dict)
+                        logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
 
             # Ensure all threads are done
             executor.shutdown(wait=True)
+
+            # Sleep 3 seconds, it seems GitLab's Postgres needs some time to write the vars to the db, otherwise the order may be wrong
+            time.sleep(3)
+
     else:
 
         # We cannot update vars as key for update is not scope safe, so we delete first if var state is not as needed
@@ -321,19 +363,44 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
 
         # Adding is scope safe, so add all missing vars
         old_gorp_variables = gorp.variables.list(get_all=True)
-        for var in gorp_dict_variables:
-            if not any(gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"] for gorp_var in old_gorp_variables):
-                var_dict = {
-                    "key": var["key"],
-                    "value": var["value"],
-                    "variable_type": var["variable_type"],
-                    "protected": var["protected"],
-                    "masked": var["masked"],
-                    "raw": var["raw"] if "raw" in var else False,
-                    "environment_scope": var["environment_scope"]
-                }
-                gorp.variables.create(var_dict)
-                logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
+
+        # We need to divide iterations per env scope.
+        # We need to create vars for the env scopes shorter by name first, so we sort by length.
+        # That is needed to mitigate a bug in GitLab scope matching, e.g.:
+        #   you have a var with the scope "*/*/dev-*" and the same named var for the scope "*/*/dev-xxx*",
+        #   if you create (so it will have higher id in pg db) the var with "*/*/dev-xxx*" first, it will be wrongly matched by GitLab to the "*/*/dev-*" scope,
+        #   but if you ensure the "*/*/dev-*" var is created first, it will be matched correctly.
+
+        # Find all unique env scopes and sort by length
+        env_scopes = list(set(var["environment_scope"] for var in gorp_dict_variables))
+        env_scopes.sort(key=len)
+
+        # For each env scope
+        for curr_env_scope in env_scopes:
+
+            for var in gorp_dict_variables:
+                if not any(gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"] for gorp_var in old_gorp_variables):
+                    if var["environment_scope"] == curr_env_scope:
+                        var_dict = {
+                            "key": var["key"],
+                            "value": var["value"],
+                            "variable_type": var["variable_type"],
+                            "protected": var["protected"],
+                            "masked": var["masked"],
+                            "raw": var["raw"] if "raw" in var else False,
+                            "environment_scope": var["environment_scope"]
+                        }
+                        try:
+                            gorp.variables.create(var_dict)
+                        except gitlab.exceptions.GitlabCreateError as e:
+                            logger.error("Error creating var {scope} / {var}, but the script continues".format(scope=var["environment_scope"], var=var["key"]))
+                            logger.error(e)
+                            if var["masked"] and (" " in var["value"] or "," in var["value"]):
+                                logger.error("Masked var {scope} / {var} has space or comma in value, so it is not created".format(scope=var["environment_scope"], var=var["key"]))
+                        logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
+
+            # Sleep 3 seconds, it seems GitLab's Postgres needs some time to write the vars to the db, otherwise the order may be wrong
+            time.sleep(3)
 
 # Main
 
@@ -788,8 +855,53 @@ if __name__ == "__main__":
                                     )
 
                                     response = response.json()
-                                    logger.info("Project {project} deploy token added:".format(project=project_dict["path"]))
-                                    logger.info(f"\n-------------------------\nToken: {response['token']}\n-------------------------")
+                                    # Log response
+                                    logger.info(f"Response: {response}")
+                                    print("Project {project} deploy token added:".format(project=project_dict["path"]))
+                                    print("---\nToken for {token_name}: {token}\n---".format(token=response["token"], token_name=deploy_token["name"]))
+
+                        # Access tokens
+                        if "access_tokens" in project_dict:
+                            for access_token in project_dict["access_tokens"]:
+                                project_id = project.id
+                                token_needs_to_be_created = True
+
+                                # Get only active tokens
+                                response = requests.get(
+                                    f'{yaml_dict["gitlab"]["url"]}/api/v4/projects/{project_id}/access_tokens?active=true',
+                                    headers={'PRIVATE-TOKEN': GL_ADMIN_PRIVATE_TOKEN}
+                                )
+                                response = response.json()
+
+                                # check token if active token exist
+                                if response:
+                                    for token in response:
+                                        if token["name"] == access_token["name"]:
+                                            token_needs_to_be_created = False
+                                            break
+
+                                if not token_needs_to_be_created:
+                                    logger.info("Project {project} access token {token_name} already exists".format(project=project_dict["path"], token_name=access_token["name"]))
+                                else:
+                                    # create a token if it does not exist or is new
+                                    data = {
+                                        "name": access_token["name"],
+                                        "scopes": access_token["scopes"],
+                                        "access_level": access_token["access_level"],
+                                        "expires_at": access_token["expires_at"]
+                                    }
+
+                                    response = requests.post(
+                                        f'{yaml_dict["gitlab"]["url"]}/api/v4/projects/{project_id}/access_tokens/',
+                                        headers={'PRIVATE-TOKEN': GL_ADMIN_PRIVATE_TOKEN},
+                                        json=data
+                                    )
+
+                                    response = response.json()
+                                    # Log response
+                                    logger.info(f"Response: {response}")
+                                    print("Project {project} access token added:".format(project=project_dict["path"]))
+                                    print("---\nToken for {token_name}: {token}\n---".format(token=response["token"], token_name=access_token["name"]))
 
                         # MR approval rules
                         if "approvals_before_merge" in project_dict:
@@ -904,9 +1016,9 @@ if __name__ == "__main__":
                                 diff = DeepDiff(old_p_branch, new_p_branch, exclude_regex_paths=[r"root\[.+\]\[.+\]\['id'\]", r"root\['id'\]"])
                                 if diff:
                                     print("Protected branch \"{branch_name}\" config diff:".format(branch_name=branch["name"]))
-                                    print("-------------------------------")
+                                    print("---")
                                     print(diff.pretty())
-                                    print("-------------------------------")
+                                    print("---")
                             project.save()
                         # Protected tags
                         if "protected_tags" in project_dict:
@@ -1018,6 +1130,8 @@ if __name__ == "__main__":
 
                             # Set othe params
                             pr.commit_committer_check = project_dict["push_rules"]["commit_committer_check"]
+                            if "commit_committer_name_check" in project_dict["push_rules"]:
+                                pr.commit_committer_name_check = project_dict["push_rules"]["commit_committer_name_check"]
                             if "reject_unsigned_commits" in project_dict["push_rules"]:
                                 pr.reject_unsigned_commits = project_dict["push_rules"]["reject_unsigned_commits"]
                             if "deny_delete_tag" in project_dict["push_rules"]:
