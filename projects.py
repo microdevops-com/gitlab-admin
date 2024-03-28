@@ -19,7 +19,6 @@ from deepdiff import DeepDiff
 # Import GraphQL client
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
-import time
 
 # Constants and envs
 
@@ -254,43 +253,25 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
 
         # Just add all vars from scratch
 
-        # We need to divide iterations per env scope, so only vars from one scope processed, wait for all threads to finish, then next scope.
-        # We need to create vars for the env scopes shorter by name first, so we sort by length.
-        # That is needed to mitigate a bug in GitLab scope matching, e.g.:
-        #   you have a var with the scope "*/*/dev-*" and the same named var for the scope "*/*/dev-xxx*",
-        #   if you create (so it will have higher id in pg db) the var with "*/*/dev-xxx*" first, it will be wrongly matched by GitLab to the "*/*/dev-*" scope,
-        #   but if you ensure the "*/*/dev-*" var is created first, it will be matched correctly.
+        # Use multithreading to speed up
+        with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_MAX_WORKERS) as executor:
 
-        # Find all unique env scopes and sort by length
-        env_scopes = list(set(var["environment_scope"] for var in gorp_dict_variables))
-        env_scopes.sort(key=len)
+            # Create vars for the env scope
+            for var in gorp_dict_variables:
+                var_dict = {
+                    "key": var["key"],
+                    "value": var["value"],
+                    "variable_type": var["variable_type"],
+                    "protected": var["protected"],
+                    "masked": var["masked"],
+                    "raw": var["raw"] if "raw" in var else False,
+                    "environment_scope": var["environment_scope"]
+                }
+                executor.submit(create_var, var_dict)
+                logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
 
-        # For each env scope
-        for curr_env_scope in env_scopes:
-
-            # Use multithreading to speed up
-            with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENT_MAX_WORKERS) as executor:
-
-                # Create vars for the env scope
-                for var in gorp_dict_variables:
-                    if var["environment_scope"] == curr_env_scope:
-                        var_dict = {
-                            "key": var["key"],
-                            "value": var["value"],
-                            "variable_type": var["variable_type"],
-                            "protected": var["protected"],
-                            "masked": var["masked"],
-                            "raw": var["raw"] if "raw" in var else False,
-                            "environment_scope": var["environment_scope"]
-                        }
-                        executor.submit(create_var, var_dict)
-                        logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
-
-            # Ensure all threads are done
-            executor.shutdown(wait=True)
-
-            # Sleep 3 seconds, it seems GitLab's Postgres needs some time to write the vars to the db, otherwise the order may be wrong
-            time.sleep(3)
+        # Ensure all threads are done
+        executor.shutdown(wait=True)
 
     else:
 
@@ -363,44 +344,25 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
 
         # Adding is scope safe, so add all missing vars
         old_gorp_variables = gorp.variables.list(get_all=True)
-
-        # We need to divide iterations per env scope.
-        # We need to create vars for the env scopes shorter by name first, so we sort by length.
-        # That is needed to mitigate a bug in GitLab scope matching, e.g.:
-        #   you have a var with the scope "*/*/dev-*" and the same named var for the scope "*/*/dev-xxx*",
-        #   if you create (so it will have higher id in pg db) the var with "*/*/dev-xxx*" first, it will be wrongly matched by GitLab to the "*/*/dev-*" scope,
-        #   but if you ensure the "*/*/dev-*" var is created first, it will be matched correctly.
-
-        # Find all unique env scopes and sort by length
-        env_scopes = list(set(var["environment_scope"] for var in gorp_dict_variables))
-        env_scopes.sort(key=len)
-
-        # For each env scope
-        for curr_env_scope in env_scopes:
-
-            for var in gorp_dict_variables:
-                if not any(gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"] for gorp_var in old_gorp_variables):
-                    if var["environment_scope"] == curr_env_scope:
-                        var_dict = {
-                            "key": var["key"],
-                            "value": var["value"],
-                            "variable_type": var["variable_type"],
-                            "protected": var["protected"],
-                            "masked": var["masked"],
-                            "raw": var["raw"] if "raw" in var else False,
-                            "environment_scope": var["environment_scope"]
-                        }
-                        try:
-                            gorp.variables.create(var_dict)
-                        except gitlab.exceptions.GitlabCreateError as e:
-                            logger.error("Error creating var {scope} / {var}, but the script continues".format(scope=var["environment_scope"], var=var["key"]))
-                            logger.error(e)
-                            if var["masked"] and (" " in var["value"] or "," in var["value"]):
-                                logger.error("Masked var {scope} / {var} has space or comma in value, so it is not created".format(scope=var["environment_scope"], var=var["key"]))
-                        logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
-
-            # Sleep 3 seconds, it seems GitLab's Postgres needs some time to write the vars to the db, otherwise the order may be wrong
-            time.sleep(3)
+        for var in gorp_dict_variables:
+            if not any(gorp_var.environment_scope == var["environment_scope"] and gorp_var.key == var["key"] for gorp_var in old_gorp_variables):
+                var_dict = {
+                    "key": var["key"],
+                    "value": var["value"],
+                    "variable_type": var["variable_type"],
+                    "protected": var["protected"],
+                    "masked": var["masked"],
+                    "raw": var["raw"] if "raw" in var else False,
+                    "environment_scope": var["environment_scope"]
+                }
+                try:
+                    gorp.variables.create(var_dict)
+                except gitlab.exceptions.GitlabCreateError as e:
+                    logger.error("Error creating var {scope} / {var}, but the script continues".format(scope=var["environment_scope"], var=var["key"]))
+                    logger.error(e)
+                    if var["masked"] and (" " in var["value"] or "," in var["value"]):
+                        logger.error("Masked var {scope} / {var} has space or comma in value, so it is not created".format(scope=var["environment_scope"], var=var["key"]))
+                logger.info("Var {scope} / {var} created".format(scope=var["environment_scope"], var=var["key"]))
 
 # Main
 
