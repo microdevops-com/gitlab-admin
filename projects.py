@@ -965,15 +965,39 @@ if __name__ == "__main__":
                                 else:
                                     old_p_branch = {}
 
-                                project.protectedbranches.create(
-                                    {
-                                        'name': branch["name"],
-                                        'push_access_level': branch["push_access_level"],
-                                        'merge_access_level': branch["merge_access_level"],
-                                        'allow_force_push': default(lambda: branch["allow_force_push"], False),
-                                        'code_owner_approval_required': branch["code_owner_approval_required"]
-                                    }
-                                )
+                                branch_dict = {
+                                    "name": branch["name"],
+                                    "push_access_level": branch["push_access_level"],
+                                    "merge_access_level": branch["merge_access_level"],
+                                    "allow_force_push": default(lambda: branch["allow_force_push"], False),
+                                    "code_owner_approval_required": branch["code_owner_approval_required"]
+                                }
+
+                                if "allowed_to_merge" in branch:
+                                    branch_dict["allowed_to_merge"] = []
+                                    for user_or_group in branch["allowed_to_merge"]:
+                                        if "user" in user_or_group:
+                                            user_id = gl.users.list(username=user_or_group["user"])[0].id
+                                            logger.info("Found user ID: {id}, name: {user}".format(id=user_id, user=user_or_group["user"]))
+                                            branch_dict["allowed_to_merge"].append({"user_id": user_id})
+                                        if "group" in user_or_group:
+                                            group_id = gl.groups.get(user_or_group["group"]).id
+                                            logger.info("Found group ID: {id}, name: {group}".format(id=group_id, group=user_or_group["group"]))
+                                            branch_dict["allowed_to_merge"].append({"group_id": group_id})
+
+                                if "allowed_to_push" in branch:
+                                    branch_dict["allowed_to_push"] = []
+                                    for user_or_group in branch["allowed_to_push"]:
+                                        if "user" in user_or_group:
+                                            user_id = gl.users.list(username=user_or_group["user"])[0].id
+                                            logger.info("Found user ID: {id}, name: {user}".format(id=user_id, user=user_or_group["user"]))
+                                            branch_dict["allowed_to_push"].append({"user_id": user_id})
+                                        if "group" in user_or_group:
+                                            group_id = gl.groups.get(user_or_group["group"]).id
+                                            logger.info("Found group ID: {id}, name: {group}".format(id=group_id, group=user_or_group["group"]))
+                                            branch_dict["allowed_to_push"].append({"group_id": group_id})
+
+                                project.protectedbranches.create(branch_dict)
                                 new_p_branch = project.protectedbranches.get(branch["name"]).asdict()
                                 diff = DeepDiff(old_p_branch, new_p_branch, exclude_regex_paths=[r"root\[.+\]\[.+\]\['id'\]", r"root\['id'\]"])
                                 if diff:
@@ -981,14 +1005,47 @@ if __name__ == "__main__":
                                     print("---")
                                     print(diff.pretty())
                                     print("---")
+
                             project.save()
+
                         # Protected tags
                         if "protected_tags" in project_dict:
                             for tag in project_dict["protected_tags"]:
+
                                 if any(project_tag.name == tag["name"] for project_tag in project.protectedtags.list(get_all=True)):
                                     p_tag = project.protectedtags.get(tag["name"])
+                                    old_p_tag = project.protectedtags.get(tag["name"]).asdict()
                                     p_tag.delete()
-                                project.protectedtags.create({'name': tag["name"], 'create_access_level': tag["create_access_level"]})
+                                else:
+                                    old_p_tag = {}
+
+                                tag_dict = {
+                                    "name": tag["name"],
+                                    "create_access_level": tag["create_access_level"]
+                                }
+
+                                if "allowed_to_create" in tag:
+                                    tag_dict["allowed_to_create"] = []
+                                    for user_or_group in tag["allowed_to_create"]:
+                                        if "user" in user_or_group:
+                                            user_id = gl.users.list(username=user_or_group["user"])[0].id
+                                            logger.info("Found user ID: {id}, name: {user}".format(id=user_id, user=user_or_group["user"]))
+                                            tag_dict["allowed_to_create"].append({"user_id": user_id})
+                                        if "group" in user_or_group:
+                                            group_id = gl.groups.get(user_or_group["group"]).id
+                                            logger.info("Found group ID: {id}, name: {group}".format(id=group_id, group=user_or_group["group"]))
+                                            tag_dict["allowed_to_create"].append({"group_id": group_id})
+
+                                project.protectedtags.create(tag_dict)
+                                new_p_tag = project.protectedtags.get(tag["name"]).asdict()
+                                diff = DeepDiff(old_p_tag, new_p_tag, exclude_regex_paths=[r"root\[.+\]\[.+\]\['id'\]", r"root\['id'\]"])
+                                if diff:
+                                    print("Protected tag \"{tag_name}\" config diff:".format(tag_name=tag["name"]))
+                                    print("---")
+                                    print(diff.pretty())
+                                    print("---")
+
+                            project.save()
 
                         # MR approval rules (should be done after branch protection reset)
                         if "merge_request_approval_rules" in project_dict:
@@ -1180,7 +1237,7 @@ if __name__ == "__main__":
                         project.save()
                         new_project_dict = project.asdict()
                         if old_project_dict != new_project_dict:
-                            print(DeepDiff(old_project_dict, new_project_dict).pretty())
+                            print(DeepDiff(old_project_dict, new_project_dict, exclude_regex_paths=[r"root\['permissions'\]"]).pretty())
 
                     logger.info("Project {project} settings:".format(project=project_dict["path"]))
                     logger.info(project)

@@ -85,9 +85,18 @@ projects:
         merge_access_level: 40
         code_owner_approval_required: True
         allow_force_push: True
+        allowed_to_merge: # optional
+          - user: user1
+          - group: dev/group2
+        allowed_to_push: # optional
+          - user: user1
+          - group: dev/group2
     protected_tags: # optional
       - name: 'v*'
         create_access_level: 40
+        allowed_to_create: # optional
+          - user: user1
+          - group: dev/group2
     merge_request_approval_rules: # optional
       - name: QA
         groups:
