@@ -1141,13 +1141,15 @@ if __name__ == "__main__":
 
                             # Get existing rules, None if not exist
                             pr = project.pushrules.get()
-                            old_pr_dict = pr.asdict()
                             if pr is None:
+                                old_pr_dict = {}
                                 # At least one option is required to create, use commit_committer_check
                                 project.pushrules.create({'commit_committer_check': project_dict["push_rules"]["commit_committer_check"]})
                                 pr = project.pushrules.get()
+                            else:
+                                old_pr_dict = pr.asdict()
 
-                            # Set othe params
+                            # Set other params
                             pr.commit_committer_check = project_dict["push_rules"]["commit_committer_check"]
                             if "commit_committer_name_check" in project_dict["push_rules"]:
                                 pr.commit_committer_name_check = project_dict["push_rules"]["commit_committer_name_check"]
