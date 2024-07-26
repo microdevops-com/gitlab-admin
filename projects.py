@@ -149,7 +149,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                 # Compare existing vars with yaml vars
                 # If any difference, print
                 if (
-                    gorp_var.value != str(var["value"])
+                    (gorp_var.value != str(var["value"]) and not (gorp_var.value is None and var["value"] is None))
                     or
                     gorp_var.variable_type != var["variable_type"]
                     or
@@ -161,7 +161,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                 ):
                     print("changed: {scope} / {var}:".format(scope=var["environment_scope"], var=var["key"]))
                     # Print old -> new
-                    if gorp_var.value != str(var["value"]):
+                    if gorp_var.value != str(var["value"]) and not (gorp_var.value is None and var["value"] is None):
                         print("  value: {old} -> {new}".format(old=gorp_var.value, new=var["value"]))
                     if gorp_var.variable_type != var["variable_type"]:
                         print("  variable_type: {old} -> {new}".format(old=gorp_var.variable_type, new=var["variable_type"]))
@@ -503,7 +503,7 @@ if __name__ == "__main__":
                         if not args.dry_run_gitlab:
 
                             # CI Variables
-                            if "variables" in project_dict:
+                            if "variables" in project_dict and not ("jobs_enabled" in project_dict and project_dict["jobs_enabled"] is False):
 
                                 logger.info("Found project yaml definition for vars: {variables}".format(variables=project_dict["variables"]))
 
@@ -718,8 +718,6 @@ if __name__ == "__main__":
                             project.auto_devops_enabled = project_dict["auto_devops_enabled"]
                         if "container_registry_enabled" in project_dict:
                             project.container_registry_enabled = project_dict["container_registry_enabled"]
-                        if "jobs_enabled" in project_dict:
-                            project.jobs_enabled = project_dict["jobs_enabled"]
                         if "jobs_enabled" in project_dict:
                             project.jobs_enabled = project_dict["jobs_enabled"]
                         if "lfs_enabled" in project_dict:
@@ -1081,7 +1079,7 @@ if __name__ == "__main__":
                                             project.runners.create({'runner_id': runner.id})
 
                         # Protected envs
-                        if "protected_environments" in project_dict:
+                        if "protected_environments" in project_dict and not ("jobs_enabled" in project_dict and project_dict["jobs_enabled"] is False):
                             for env in project_dict["protected_environments"]:
                                 # Create env first
                                 if not any(p_env.name == env["name"] for p_env in project.environments.list(get_all=True)):
@@ -1125,7 +1123,7 @@ if __name__ == "__main__":
                                     logger.info(process.stderr)
 
                         # CI Variables
-                        if "variables" in project_dict:
+                        if "variables" in project_dict and not ("jobs_enabled" in project_dict and project_dict["jobs_enabled"] is False):
 
                             # Check variables_clean_all_before_set
                             if args.variables_clean_all_before_set or ("variables_clean_all_before_set" in project_dict and project_dict["variables_clean_all_before_set"]):
