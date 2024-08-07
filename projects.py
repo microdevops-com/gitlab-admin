@@ -39,9 +39,24 @@ class SubprocessRunError(Exception):
 # Function to apply vars for a group or a project (gorp)
 def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_before_set, logger):
 
+    # Expand defaults gorp_dict to gorp_dict_variables_pre0
+    gorp_dict_variables_pre0 = []
+    for var in gorp_dict["variables"]:
+        if "variable_type" not in var:
+            var["variable_type"] = "env_var"
+        if "protected" not in var:
+            var["protected"] = False
+        if "masked" not in var:
+            var["masked"] = False
+        if "raw" not in var:
+            var["raw"] = False
+        if "environment_scope" not in var:
+            var["environment_scope"] = "*"
+        gorp_dict_variables_pre0.append(var)
+
     # Expand quick key_values sets, pre1 before expanding environment_scope
     gorp_dict_variables_pre1 = []
-    for var in gorp_dict["variables"]:
+    for var in gorp_dict_variables_pre0:
         if "key_values" in var:
             for k, v in var["key_values"].items():
                 gorp_dict_variables_pre1.append(
@@ -49,7 +64,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         "variable_type": var["variable_type"],
                         "protected": var["protected"],
                         "masked": var["masked"],
-                        "raw": var["raw"] if "raw" in var else False,
+                        "raw": var["raw"],
                         "environment_scope": var["environment_scope"],
                         "key": k,
                         "value": v
@@ -68,7 +83,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         "variable_type": var["variable_type"],
                         "protected": var["protected"],
                         "masked": var["masked"],
-                        "raw": var["raw"] if "raw" in var else False,
+                        "raw": var["raw"],
                         "environment_scope": env_scope,
                         "key": var["key"],
                         "value": var["value"]
@@ -87,9 +102,24 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
             if var_file_dict is None:
                 raise Exception("Config file error or missing: {0}".format(var_file))
 
+            # Expand defaults in var_file_dict to var_file_dict_expanded_pre0
+            var_file_dict_expanded_pre0 = []
+            for var in var_file_dict:
+                if "variable_type" not in var:
+                    var["variable_type"] = "env_var"
+                if "protected" not in var:
+                    var["protected"] = False
+                if "masked" not in var:
+                    var["masked"] = False
+                if "raw" not in var:
+                    var["raw"] = False
+                if "environment_scope" not in var:
+                    var["environment_scope"] = "*"
+                var_file_dict_expanded_pre0.append(var)
+
             # Expand quick key_values sets in variables from file, pre1 before expanding environment_scope
             var_file_dict_expanded_pre1 = []
-            for var in var_file_dict:
+            for var in var_file_dict_expanded_pre0:
                 if "key_values" in var:
                     for k, v in var["key_values"].items():
                         var_file_dict_expanded_pre1.append(
@@ -97,7 +127,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                                 "variable_type": var["variable_type"],
                                 "protected": var["protected"],
                                 "masked": var["masked"],
-                                "raw": var["raw"] if "raw" in var else False,
+                                "raw": var["raw"],
                                 "environment_scope": var["environment_scope"],
                                 "key": k,
                                 "value": v
@@ -116,7 +146,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                                 "variable_type": var["variable_type"],
                                 "protected": var["protected"],
                                 "masked": var["masked"],
-                                "raw": var["raw"] if "raw" in var else False,
+                                "raw": var["raw"],
                                 "environment_scope": env_scope,
                                 "key": var["key"],
                                 "value": var["value"]
@@ -157,7 +187,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                     or
                     gorp_var.masked != var["masked"]
                     or
-                    gorp_var.raw != (var["raw"] if "raw" in var else False)
+                    gorp_var.raw != var["raw"]
                 ):
                     print("changed: {scope} / {var}:".format(scope=var["environment_scope"], var=var["key"]))
                     # Print old -> new
@@ -169,15 +199,15 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         print("  protected: {old} -> {new}".format(old=gorp_var.protected, new=var["protected"]))
                     if gorp_var.masked != var["masked"]:
                         print("  masked: {old} -> {new}".format(old=gorp_var.masked, new=var["masked"]))
-                    if gorp_var.raw != (var["raw"] if "raw" in var else False):
-                        print("  raw: {old} -> {new}".format(old=gorp_var.raw, new=var["raw"] if "raw" in var else False))
+                    if gorp_var.raw != var["raw"]:
+                        print("  raw: {old} -> {new}".format(old=gorp_var.raw, new=var["raw"]))
         if not var_found:
             print("new: {scope} / {var}".format(scope=var["environment_scope"], var=var["key"]))
             print("  value: {value}".format(value=var["value"]))
             print("  variable_type: {variable_type}".format(variable_type=var["variable_type"]))
             print("  protected: {protected}".format(protected=var["protected"]))
             print("  masked: {masked}".format(masked=var["masked"]))
-            print("  raw: {raw}".format(raw=var["raw"] if "raw" in var else False))
+            print("  raw: {raw}".format(raw=var["raw"]))
 
     # Check vars to delete
     for gorp_var in old_gorp_variables:
@@ -264,7 +294,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                     "variable_type": var["variable_type"],
                     "protected": var["protected"],
                     "masked": var["masked"],
-                    "raw": var["raw"] if "raw" in var else False,
+                    "raw": var["raw"],
                     "environment_scope": var["environment_scope"]
                 }
                 executor.submit(create_var, var_dict)
@@ -289,7 +319,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                         or
                         gorp_var.masked != var["masked"]
                         or
-                        gorp_var.raw != (var["raw"] if "raw" in var else False)
+                        gorp_var.raw != var["raw"]
                     ):
                         # gorp_var.delete()
                         # There is a bug (at least at python-gitlab 2.5.0):
@@ -352,7 +382,7 @@ def apply_vars_gorp(gorp_kind, yaml_dict, gorp, gorp_dict, variables_clean_all_b
                     "variable_type": var["variable_type"],
                     "protected": var["protected"],
                     "masked": var["masked"],
-                    "raw": var["raw"] if "raw" in var else False,
+                    "raw": var["raw"],
                     "environment_scope": var["environment_scope"]
                 }
                 try:
