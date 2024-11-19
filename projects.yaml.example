@@ -156,27 +156,27 @@ projects:
     variables: # optional
       - key: TEST1 # mandatory
         value: XXX1 # mandatory
-        variable_type: env_var # mandatory, env_var or file
+        variable_type: env_var # env_var by default or file
         protected: True # False by default
         masked: False # False by default
         #raw: True # optional, False by default, "Expand variable reference" switcher, in API reference it is called "raw" https://docs.gitlab.com/ee/api/project_level_variables.html
         environment_scope: '*' # * by default
       - key: TEST1 # mandatory, we can have the same var in different scopes
         value: XXX1 # mandatory
-        variable_type: env_var # mandatory, env_var or file
-        environment_scope: 'staging' # mandatory
+        variable_type: env_var # env_var by default or file
+        environment_scope: 'staging'
       - key: TEST_TRUE
         value: "true" # do not put yaml boolean in value as GitLab vars are not boolean compatible, it will save them as "true" and "false" strings, put the same here
         variable_type: env_var
-        environment_scope: 'prod' # mandatory
+        environment_scope: 'prod'
       - key: TEST_FALSE
         value: "false" # do not put yaml boolean in value as GitLab vars are not boolean compatible, it will save them as "true" and "false" strings, put the same here
         variable_type: env_var
         environment_scope: # you can use list of scopes here, it will be expanded to several vars in gitlab
           - 'prod'
           - 'staging'
-      - variable_type: env_var # mandatory, env_var or file
-        environment_scope: 'dev/my-*' # mandatory
+      - variable_type: env_var
+        environment_scope: 'dev/my-*'
         key_values: # another more compact format to set multiple key-values for the same scope, type of var
           TEST1: XXX1
           TEST2: XXX2
