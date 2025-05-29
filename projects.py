@@ -793,6 +793,7 @@ if __name__ == "__main__":
                                         current_member.access_level = member["access_level"]
                                         current_member.save()
                                     except gitlab.exceptions.GitlabGetError as e:
+                                        logger.info("User {user} not found in project {project}, adding".format(user=member["user"], project=project_dict["path"]))
                                         gl_member = project.members.create({'user_id': user_id, 'access_level': member["access_level"]})
                                         gl_member.save()
                                 if "group" in member:
