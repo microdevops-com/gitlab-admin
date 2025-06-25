@@ -93,6 +93,8 @@ Push images:
 ./registry.py --ids-file ids.txt --push-gitlab-url https://gitlab.example.org --push-project-path new/path --old-registry-location gitlab.example.org:5001/old/path
 ```
 
+After pushing the images second attempt will not pass, as additional tags will be added to the local images. Delete local images and pull them again to make another attempt.
+
 Delete local images:
 ```
 ./registry.py --ids-file ids.txt --rm-images
