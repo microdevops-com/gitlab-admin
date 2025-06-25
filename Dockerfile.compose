@@ -1,0 +1,25 @@
+FROM python:3.10-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV MY_USER="app"
+ENV MY_GROUP="app"
+ARG DOCKER_UID=1000
+ARG DOCKER_GID=1000
+
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends procps curl bash libpq-dev build-essential docker.io
+
+RUN groupadd -g ${DOCKER_GID} -r ${MY_GROUP} \
+	  && useradd -d /app -u ${DOCKER_UID} -m -s /bin/bash -g ${MY_GROUP} ${MY_USER}
+
+# make docker in docker work
+ARG DOCKER_HOST_GID=984
+RUN groupmod -g ${DOCKER_HOST_GID} docker
+
+WORKDIR /app
+
+COPY requirements.txt ./
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+CMD ["bash"]
