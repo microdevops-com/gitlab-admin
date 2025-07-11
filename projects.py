@@ -499,6 +499,9 @@ if __name__ == "__main__":
                             # CI Variables
                             if "variables" in group_dict or "variables_from_files" in group_dict:
 
+                                if "variables" not in group_dict:
+                                    group_dict["variables"] = []
+
                                 logger.info("Found group yaml definition for vars: {variables}".format(variables=group_dict["variables"]))
 
                                 # Always clean all vars before set
@@ -534,6 +537,9 @@ if __name__ == "__main__":
 
                             # CI Variables
                             if ("variables" in project_dict or "variables_from_files" in project_dict) and not ("jobs_enabled" in project_dict and project_dict["jobs_enabled"] is False):
+
+                                if "variables" not in project_dict:
+                                    project_dict["variables"] = []
 
                                 logger.info("Found project yaml definition for vars: {variables}".format(variables=project_dict["variables"]))
 
@@ -638,6 +644,9 @@ if __name__ == "__main__":
                                             group.share(group_id, member["access_level"])
                         # CI Variables
                         if "variables" in group_dict or "variables_from_files" in group_dict:
+
+                            if "variables" not in group_dict:
+                                group_dict["variables"] = []
 
                             # Check variables_clean_all_before_set
                             if args.variables_clean_all_before_set or ("variables_clean_all_before_set" in group_dict and group_dict["variables_clean_all_before_set"]):
@@ -1155,6 +1164,9 @@ if __name__ == "__main__":
 
                         # CI Variables
                         if ("variables" in project_dict or "variables_from_files" in project_dict) and not ("jobs_enabled" in project_dict and project_dict["jobs_enabled"] is False):
+
+                            if "variables" not in project_dict:
+                                project_dict["variables"] = []
 
                             # Check variables_clean_all_before_set
                             if args.variables_clean_all_before_set or ("variables_clean_all_before_set" in project_dict and project_dict["variables_clean_all_before_set"]):
