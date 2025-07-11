@@ -76,7 +76,7 @@ Pull images, you can omit `--delete-tags-after-pull` first time just to make sur
 ./registry.py --ids-file ids.txt --pull-gitlab-url https://gitlab.example.org --pull-project-path old/path
 ```
 
-Pull together with deleting tags after pull:
+Pull together with deleting tags after pull, if you want to run it for the second time, backup `ids.txt` file first, as it will be cleared:
 ```
 ./registry.py --ids-file ids.txt --pull-gitlab-url https://gitlab.example.org --pull-project-path old/path --delete-tags-after-pull
 ```
