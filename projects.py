@@ -497,7 +497,7 @@ if __name__ == "__main__":
                         if not args.dry_run_gitlab:
 
                             # CI Variables
-                            if "variables" in group_dict:
+                            if "variables" in group_dict or "variables_from_files" in group_dict:
 
                                 logger.info("Found group yaml definition for vars: {variables}".format(variables=group_dict["variables"]))
 
@@ -533,7 +533,7 @@ if __name__ == "__main__":
                         if not args.dry_run_gitlab:
 
                             # CI Variables
-                            if "variables" in project_dict and not ("jobs_enabled" in project_dict and project_dict["jobs_enabled"] is False):
+                            if ("variables" in project_dict or "variables_from_files" in project_dict) and not ("jobs_enabled" in project_dict and project_dict["jobs_enabled"] is False):
 
                                 logger.info("Found project yaml definition for vars: {variables}".format(variables=project_dict["variables"]))
 
@@ -637,7 +637,7 @@ if __name__ == "__main__":
                                             group.unshare(group_id)
                                             group.share(group_id, member["access_level"])
                         # CI Variables
-                        if "variables" in group_dict:
+                        if "variables" in group_dict or "variables_from_files" in group_dict:
 
                             # Check variables_clean_all_before_set
                             if args.variables_clean_all_before_set or ("variables_clean_all_before_set" in group_dict and group_dict["variables_clean_all_before_set"]):
@@ -1154,7 +1154,7 @@ if __name__ == "__main__":
                                     logger.info(process.stderr)
 
                         # CI Variables
-                        if "variables" in project_dict and not ("jobs_enabled" in project_dict and project_dict["jobs_enabled"] is False):
+                        if ("variables" in project_dict or "variables_from_files" in project_dict) and not ("jobs_enabled" in project_dict and project_dict["jobs_enabled"] is False):
 
                             # Check variables_clean_all_before_set
                             if args.variables_clean_all_before_set or ("variables_clean_all_before_set" in project_dict and project_dict["variables_clean_all_before_set"]):
