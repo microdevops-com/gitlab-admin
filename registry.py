@@ -132,20 +132,34 @@ def main(pull_gitlab_url, pull_project_path, push_gitlab_url, push_project_path,
                 image = docker_client.images.get(image_id)
                 print(f"Pushing image: {image.id}.")
 
+                # We need to work with a tag that contains old_registry_location
+                # If the image has no tags, skip it.
+                if not image.tags:
+                    print(f"  Image {image.id} has no tags, skipping.")
+                    continue
+
+                # Find tag number that contains old_registry_location.
+                tag_number = 0
+                for tag in image.tags:
+                    if old_registry_location in tag:
+                        print(f"  Found tag {tag} with old registry location {old_registry_location}.")
+                        break
+                    tag_number += 1
+
                 # If the image tag contains two colons, it means it has a port specified.
-                if ':' in image.tags[0] and image.tags[0].count(':') > 1:
-                    image_tag = image.tags[0].split(':')[2]
-                    image_without_tag = image.tags[0].split(':')[0] + ":" + image.tags[0].split(':')[1]
+                if ':' in image.tags[tag_number] and image.tags[tag_number].count(':') > 1:
+                    image_tag = image.tags[tag_number].split(':')[2]
+                    image_without_tag = image.tags[tag_number].split(':')[0] + ":" + image.tags[tag_number].split(':')[1]
                 # If the image tag contains one colon, it means the port is not specified, and the tag is after the first colon.
-                elif ':' in image.tags[0] and image.tags[0].count(':') == 1:
-                    image_tag = image.tags[0].split(':')[1]
-                    image_without_tag = image.tags[0].split(':')[0]
+                elif ':' in image.tags[tag_number] and image.tags[tag_number].count(':') == 1:
+                    image_tag = image.tags[tag_number].split(':')[1]
+                    image_without_tag = image.tags[tag_number].split(':')[0]
                 # In other cases just use skip this image.
                 else:
                     print(f"  Image {image.id} has no repository specific tag, skipping.")
                     continue
 
-                print(f"  Image {image.id} has repository specific tag: {image.tags[0]} and tag: {image_tag}.")
+                print(f"  Image {image.id} has repository specific tag: {image.tags[tag_number]} and tag: {image_tag}.")
 
                 # Remove old_registry_location from the image_without_tag - it will give repository path inside project registry.
                 repository_path = image_without_tag.replace(old_registry_location, '')
