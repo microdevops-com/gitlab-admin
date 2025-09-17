@@ -407,6 +407,7 @@ if __name__ == "__main__":
     #parser.add_argument("--ignore-db", dest="ignore_db", help="ignore connect to db if do not use specific options", action="store_true")
     parser.add_argument("--variables-clean-all-before-set", dest="variables_clean_all_before_set", help="delete all variables before setting, useful to clean garbage", action="store_true")
     parser.add_argument("--apply-variables-dry-run", dest="apply_variables_dry_run", help="together with --apply-variables leads to just show the diff between existing and defined in yaml vars without applying", action="store_true")
+    parser.add_argument("--bulk-delete-tags-default-policy", dest="bulk_delete_tags_default_policy", help="default policy yaml file for bulk delete tags in projects, applied if no bulk_delete_tags policy defined in project", nargs=1, metavar=("FILE"))
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--setup-projects", dest="setup_projects", help="ensure projects created in GitLab, their settings setup", action="store_true")
     group.add_argument("--dump-projects", dest="dump_projects", help="dump project settings", action="store_true")
@@ -1387,17 +1388,33 @@ if __name__ == "__main__":
                 logger.info("Found project yaml definition: {project}".format(project=project_dict))
 
                 # Check project active and 
-                if project_dict["active"] and "bulk_delete_tags" in project_dict:
+                if project_dict["active"] and ("bulk_delete_tags" in project_dict or args.bulk_delete_tags_default_policy):
 
                     # Get GitLab project for
                     project = gl.projects.get(project_dict["path"])
                     logger.info("Project {project} ssh_url_to_repo: {ssh_url_to_repo}, path_with_namespace: {path_with_namespace}".format(project=project_dict["path"], path_with_namespace=project.path_with_namespace, ssh_url_to_repo=project.ssh_url_to_repo))
 
+                    # Check project has container registry enabled
+                    if not project.container_registry_enabled:
+                        logger.info("Project {project} container registry not enabled, skipping.".format(project=project_dict["path"]))
+                        continue
+
                     # Set needed project params
                     if not args.dry_run_gitlab:
 
+                        # Decide which rules to apply
+                        if "bulk_delete_tags" in project_dict:
+                            rules_to_apply = project_dict["bulk_delete_tags"]
+                        else:
+                            default_policy_yaml = load_yaml("{0}".format(args.bulk_delete_tags_default_policy[0]), logger)
+                            if default_policy_yaml is None:
+                                raise Exception("Config file error or missing: {0}".format(args.bulk_delete_tags_default_policy[0]))
+                            if "bulk_delete_tags" not in default_policy_yaml or not default_policy_yaml["bulk_delete_tags"]:
+                                raise Exception("bulk_delete_tags not found in default policy yaml: {0}".format(args.bulk_delete_tags_default_policy[0]))
+                            rules_to_apply = default_policy_yaml["bulk_delete_tags"]
+
                         # Loop bulk_delete_tags rules:
-                        for rule in project_dict["bulk_delete_tags"]:
+                        for rule in rules_to_apply:
 
                             logger.info("Rule {rule}".format(rule=rule))
 
