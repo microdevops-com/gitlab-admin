@@ -1,0 +1,4 @@
+#!/bin/bash
+cd gitlab-admin
+source .env.local
+find ./projects -name \*.yaml -exec ./projects.py --bulk-delete-tags-in-projects --bulk-delete-tags-default-policy bulk_delete_tags_default_policy.yaml --yaml {} \;
