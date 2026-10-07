@@ -531,6 +531,9 @@ if __name__ == "__main__":
                         # Get GitLab project
                         logger.info("Getting project {project}".format(project=project_dict["path"]))
                         project = gl.projects.get(project_dict["path"])
+                        # GitLab follows redirects of renamed or moved projects, so the old path may return another project
+                        if project.path_with_namespace.lower() != project_dict["path"].lower():
+                            logger.warning("Project {project} redirects to {redirect} (id {id}), applying variables to it".format(project=project_dict["path"], redirect=project.path_with_namespace, id=project.id))
                         old_project_dict = project.asdict()
 
                         # Set needed project params
@@ -700,6 +703,12 @@ if __name__ == "__main__":
                     try:
                         logger.info("Checking project {project}".format(project=project_dict["path"]))
                         project = gl.projects.get(project_dict["path"])
+                        # GitLab follows redirects of renamed or moved projects, so the old path may return another project
+                        if project.path_with_namespace.lower() != project_dict["path"].lower():
+                            logger.warning("Project {project} redirects to {redirect} (id {id}), treating as not found".format(project=project_dict["path"], redirect=project.path_with_namespace, id=project.id))
+                            # Raise not found to get into except below, otherwise we would setup the renamed project with this yaml,
+                            # new project is created with the old path, GitLab then drops the redirect
+                            raise gitlab.exceptions.GitlabGetError("Project {project} not found, got redirect".format(project=project_dict["path"]), 404)
                         old_project_dict = project.asdict()
                     except gitlab.exceptions.GitlabGetError as e:
                         # Create if not found
@@ -1393,6 +1402,9 @@ if __name__ == "__main__":
                     # Get GitLab project for
                     project = gl.projects.get(project_dict["path"])
                     logger.info("Project {project} ssh_url_to_repo: {ssh_url_to_repo}, path_with_namespace: {path_with_namespace}".format(project=project_dict["path"], path_with_namespace=project.path_with_namespace, ssh_url_to_repo=project.ssh_url_to_repo))
+                    # GitLab follows redirects of renamed or moved projects, so the old path may return another project
+                    if project.path_with_namespace.lower() != project_dict["path"].lower():
+                        logger.warning("Project {project} redirects to {redirect} (id {id}), deleting tags in it".format(project=project_dict["path"], redirect=project.path_with_namespace, id=project.id))
 
                     # Check project has container registry enabled
                     if not project.container_registry_enabled:

@@ -18,6 +18,11 @@ groups:
     variables: # optional, see projects:variables for complete description
       ...
 projects:
+  # Note on path: GitLab keeps redirects from old paths of renamed or moved projects, and API lookup by path follows them,
+  # so the old path returns the renamed project (e.g. project created as group/project-a, renamed to group/project-b, group/project-a -> group/project-b).
+  # --setup-projects treats such redirect as not found and creates a new project with the old path (GitLab then drops the redirect),
+  # other operations (e.g. --apply-variables) follow the redirect and only log a warning,
+  # so update the path in yaml after renaming or moving a project, to avoid two yamls managing the same project.
   - path: dev/projects/subgroup/project1 # mandatory
     name: Project1 # mandatory
     active: True # mandatory
